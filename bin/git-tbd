@@ -82,6 +82,7 @@ case "$1" in
     sync_branch
     ;;
   pr)
+    shift
     open_pr "$@"
     ;;
   help | *)
