@@ -1,0 +1,64 @@
+#!/bin/bash
+
+# git-tbd : un mini outil CLI pour gérer un workflow Trunk-Based Development 🚀
+
+BOLD="\e[1m"
+GREEN="\e[32m"
+YELLOW="\e[33m"
+RESET="\e[0m"
+
+function print_help() {
+  echo -e "${BOLD}git-tbd${RESET} - CLI pour workflow Trunk-Based Development\n"
+  echo "Usage:"
+  echo "  git-tbd start <feature-name>   → Crée une branche feature/<feature-name>"
+  echo "  git-tbd finish                 → Merge dans main + suppression de la branche"
+  echo "  git-tbd sync                   → Met à jour la branche courante depuis main"
+  echo "  git-tbd help                   → Affiche cette aide"
+}
+
+function start_feature() {
+  local name="$1"
+  if [ -z "$name" ]; then
+    echo -e "${YELLOW}⚠️  Tu dois spécifier un nom de feature.${RESET}"
+    exit 1
+  fi
+  git checkout main && git pull
+  git checkout -b "feature/$name"
+  echo -e "${GREEN}✅ Branche créée : feature/$name${RESET}"
+}
+
+function finish_feature() {
+  local current=$(git rev-parse --abbrev-ref HEAD)
+  if [[ "$current" != feature/* ]]; then
+    echo -e "${YELLOW}⚠️  Tu dois être sur une branche feature/* pour finir.${RESET}"
+    exit 1
+  fi
+  git checkout main && git pull
+  git merge --no-ff "$current" -m "Merge $current"
+  git branch -d "$current"
+  git push
+  echo -e "${GREEN}✅ Feature mergée et supprimée : $current${RESET}"
+}
+
+function sync_branch() {
+  git fetch origin
+  git rebase origin/main
+  echo -e "${GREEN}🔄 Branche synchronisée avec main.${RESET}"
+}
+
+# Dispatcher
+case "$1" in
+  start)
+    shift
+    start_feature "$1"
+    ;;
+  finish)
+    finish_feature
+    ;;
+  sync)
+    sync_branch
+    ;;
+  help | *)
+    print_help
+    ;;
+esac
