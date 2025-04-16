@@ -1,0 +1,16 @@
+name: Bash Lint
+
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  shellcheck:
+    name: Vérification du script Bash
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Installer ShellCheck
+        run: sudo apt update && sudo apt install -y shellcheck
+      - name: Analyser le script
+        run: shellcheck bin/git-tbd

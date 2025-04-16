@@ -46,6 +46,29 @@ function sync_branch() {
   echo -e "${GREEN}🔄 Branche synchronisée avec main.${RESET}"
 }
 
+function open_pr() {
+  local branch=$(git rev-parse --abbrev-ref HEAD)
+
+  if [[ "$branch" != feature/* ]]; then
+    echo -e "${YELLOW}⚠️  Tu dois être sur une branche feature/* pour créer une PR.${RESET}"
+    exit 1
+  fi
+
+  local title="${1:-${branch/feature\//}}"
+  local body="${2:-Pull request automatique depuis \`$branch\` vers \`main\`.}"
+  
+  # Push si nécessaire
+  git push -u origin "$branch"
+
+  # Création de la PR via GitHub CLI
+  gh pr create --base main --head "$branch" --title "$title" --body "$body"
+
+  # Récupération du lien vers la PR
+  local url=$(gh pr view --json url -q ".url")
+  echo -e "${GREEN}✅ PR créée depuis $branch vers main${RESET}"
+  echo -e "🔗 Lien : ${BOLD}${url}${RESET}"
+}
+
 # Dispatcher
 case "$1" in
   start)
@@ -57,6 +80,9 @@ case "$1" in
     ;;
   sync)
     sync_branch
+    ;;
+  pr)
+    open_pr "$@"
     ;;
   help | *)
     print_help
