@@ -49,14 +49,23 @@ function sync_branch() {
 function open_pr() {
   local branch=$(git rev-parse --abbrev-ref HEAD)
 
-  if [[ "$branch" != feature/* ]]; then
-    echo -e "${YELLOW}⚠️  Tu dois être sur une branche feature/* pour créer une PR.${RESET}"
-    exit 1
-  fi
+  branch_type=$(echo "$branch" | cut -d'/' -f1)
+  branch_name=${branch#"$branch_type"/}
 
-  local title="${1:-${branch/feature\//}}"
-  local body="${2:-Pull request automatique depuis \`$branch\` vers \`main\`.}"
-  
+  case "$branch_type" in
+    feature) prefix="✨ feat" ;;
+    fix)     prefix="🐛 fix" ;;
+    hotfix)  prefix="🚒 hotfix" ;;  # à adapter si tu veux différencier
+    chore)   prefix="🧹 chore" ;;
+    *)
+      echo -e "${YELLOW}⚠️  Tu dois être sur une branche (feature|fix|hotfix|chore)/* pour créer une PR.${RESET}"
+      exit 1
+    ;;
+  esac
+
+  local title="$prefix($branch_name)"
+  local body="${2:-Pull request automatique depuis \`$branch\` vers \`main\`}"
+
   # Push si nécessaire
   git push -u origin "$branch"
 
@@ -82,6 +91,7 @@ case "$1" in
     sync_branch
     ;;
   pr)
+    shift
     open_pr "$@"
     ;;
   help | *)
