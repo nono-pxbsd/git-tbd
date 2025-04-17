@@ -7,6 +7,15 @@ GREEN="\e[32m"
 YELLOW="\e[33m"
 RESET="\e[0m"
 
+# Définition des types et icônes
+BRANCH_TYPES=("feature" "fix" "hotfix" "chore")
+declare -A BRANCH_ICONS=(
+  [feature]="✨ feat"
+  [fix]="🐛 fix"
+  [hotfix]="🚑 hotfix"
+  [chore]="🧹 chore"
+)
+
 function print_help() {
   echo -e "${BOLD}git-tbd${RESET} - CLI pour workflow Trunk-Based Development\n"
   echo "Usage:"
@@ -16,28 +25,76 @@ function print_help() {
   echo "  git-tbd help                   → Affiche cette aide"
 }
 
-function start_feature() {
+create_branch() {
+  local type="$1"
+  local name="$2"
+
+  if [[ -z "$type" || -z "$name" ]]; then
+    echo -e "${YELLOW}⚠️  Type ou nom de branche manquant.${RESET}"
+    return 1
+  fi
+
+  # Bascule sur main à jour
+  git checkout main &>/dev/null || {
+    echo -e "${YELLOW}⚠️  La branche main est introuvable.${RESET}"
+    return 1
+  }
+  git pull &>/dev/null
+
+  local full_branch="${type}/${name}"
+  git checkout -b "$full_branch"
+  echo -e "${GREEN}✅ Branche créée : ${full_branch}${RESET}"
+}
+
+# Fonction start générique
+start() {
+  # Vérifie fzf
+  if ! command -v fzf >/dev/null; then
+    echo -e "${YELLOW}⚠️  La commande 'fzf' est requise pour cette fonction.${RESET}"
+    return 1
+  fi
+
+  local branch_type=$(printf "%s\n" "${BRANCH_TYPES[@]}" | fzf --prompt="🧭 Type de branche ? > " --height=10%)
+  if [[ -z "$branch_type" ]]; then
+    echo -e "${YELLOW}⚠️  Aucune sélection effectuée.${RESET}"
+    return 1
+  fi
+
+  echo -ne "📝 Nom de la branche : "
+  read name
+  if [[ -z "$name" ]]; then
+    echo -e "${YELLOW}⚠️  Tu dois spécifier un nom.${RESET}"
+    return 1
+  fi
+
+  create_branch "$branch_type" "$name"
+}
+
+# Fonction finish universelle
+finish() {
+  local branch=$(git rev-parse --abbrev-ref HEAD)
+  local type=${branch%%/*}
+  local name=${branch#*/}
+
+  case "$type" in
+    feature) finish_feature "$name" ;;
+    fix)     finish_fix "$name" ;;
+    chore)   finish_chore "$name" ;;
+    hotfix)  finish_hotfix "$name" ;;
+    *)
+      echo -e "${YELLOW}⚠️  Type de branche non reconnu ou non supporté : $branch${RESET}"
+      return 1
+      ;;
+  esac
+}
+
+start_feature() {
   local name="$1"
   if [ -z "$name" ]; then
     echo -e "${YELLOW}⚠️  Tu dois spécifier un nom de feature.${RESET}"
     exit 1
   fi
-  git checkout main && git pull
-  git checkout -b "feature/$name"
-  echo -e "${GREEN}✅ Branche créée : feature/$name${RESET}"
-}
-
-function finish_feature() {
-  local current=$(git rev-parse --abbrev-ref HEAD)
-  if [[ "$current" != feature/* ]]; then
-    echo -e "${YELLOW}⚠️  Tu dois être sur une branche feature/* pour finir.${RESET}"
-    exit 1
-  fi
-  git checkout main && git pull
-  git merge --no-ff "$current" -m "Merge $current"
-  git branch -d "$current"
-  git push
-  echo -e "${GREEN}✅ Feature mergée et supprimée : $current${RESET}"
+  create_branch "feature" "$name"
 }
 
 function sync_branch() {
@@ -63,7 +120,7 @@ function open_pr() {
     ;;
   esac
 
-  local title="$prefix($branch_name)"
+  local title="${prefix}(${branch_name})"
   local body="${2:-Pull request automatique depuis \`$branch\` vers \`main\`}"
 
   # Push si nécessaire
@@ -82,13 +139,19 @@ function open_pr() {
 case "$1" in
   start)
     shift
-    start_feature "$1"
+    start
     ;;
   finish)
-    finish_feature
+    shift
+    finish
     ;;
-  sync)
-    sync_branch
+  start_feature)
+    shift
+    start_feature "$1"
+    ;;
+  finish_feature)
+    shift
+    finish_feature "$1"
     ;;
   pr)
     shift
