@@ -18,11 +18,13 @@ declare -A BRANCH_ICONS=(
 
 function print_help() {
   echo -e "${BOLD}git-tbd${RESET} - CLI pour workflow Trunk-Based Development\n"
-  echo "Usage:"
-  echo "  git-tbd start <feature-name>   → Crée une branche feature/<feature-name>"
-  echo "  git-tbd finish                 → Merge dans main + suppression de la branche"
-  echo "  git-tbd sync                   → Met à jour la branche courante depuis main"
-  echo "  git-tbd help                   → Affiche cette aide"
+  echo "Usage :"
+  echo "  git-tbd start              → Sélection interactive du type de branche à créer"
+  echo "  git-tbd finish             → Merge dans main + suppression de la branche"
+  echo "  git-tbd sync               → Met à jour la branche courante depuis main"
+  echo "  git-tbd pr                 → Ouvre une Pull Request automatiquement"
+  echo "  git-tbd bump <type>        → Bump la version (major, minor, patch)"
+  echo "  git-tbd help               → Affiche cette aide"
 }
 
 create_branch() {
