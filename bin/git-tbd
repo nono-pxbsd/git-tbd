@@ -86,24 +86,46 @@ start_feature() {
 
 # Fonction finish universelle
 finish() {
-  local type="$1"
-  local name="$2"
+  local type=""
+  local name=""
+  local current=$(git rev-parse --abbrev-ref HEAD)
+
+  # Déduction depuis la branche actuelle
+  if [[ $# -eq 0 ]]; then
+    type="${current%%/*}"
+    name="${current#*/}"
+  elif [[ $# -eq 1 ]]; then
+    if [[ "$1" == */* ]]; then
+      type="${1%%/*}"
+      name="${1#*/}"
+    else
+      type="$1"
+      name="${current#*/}"
+    fi
+  elif [[ $# -eq 2 ]]; then
+    type="$1"
+    name="$2"
+  else
+    echo -e "${YELLOW}⚠️  Trop d'arguments. Usage : finish [type[/name] | type name]${RESET}"
+    return 1
+  fi
+
+  # Validation du type
+  if [[ ! "$type" =~ ^(feature|fix|hotfix|chore)$ ]]; then
+    echo -e "${YELLOW}⚠️  Type non supporté : $type${RESET}"
+    return 1
+  fi
 
   local branch="${type}/${name}"
   local label="${type}(${name})"
 
-  echo -e "${GREEN}🔀 Fusion de la branche ${branch} dans main...${RESET}"
+  echo -e "${GREEN}🔁 Fusion de la branche ${branch} dans main...${RESET}"
   git checkout main && git pull
   git merge --no-ff "$branch" -m "$label: merge ${type} into main"
   git branch -d "$branch"
   git push origin --delete "$branch" 2>/dev/null || true
   echo -e "${GREEN}✅ Branche ${branch} fusionnée et supprimée.${RESET}"
 }
-
-finish_feature() { finish feature "$1"; }
-finish_fix()     { finish fix "$1"; }
-finish_chore()   { finish chore "$1"; }
-finish_hotfix()  { finish hotfix "$1"; }
 
 function sync_branch() {
   git fetch origin
@@ -151,15 +173,11 @@ case "$1" in
     ;;
   finish)
     shift
-    finish "$1"
+    finish "$@"
     ;;
   start_feature)
     shift
     start_feature "$1"
-    ;;
-  finish_feature)
-    shift
-    finish_feature "$1"
     ;;
   pr)
     shift
