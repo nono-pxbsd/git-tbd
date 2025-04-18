@@ -75,24 +75,6 @@ start() {
   create_branch "$branch_type" "$name"
 }
 
-# Fonction finish universelle
-finish() {
-  local branch=$(git rev-parse --abbrev-ref HEAD)
-  local type=${branch%%/*}
-  local name=${branch#*/}
-
-  case "$type" in
-    feature) finish_feature "$name" ;;
-    fix)     finish_fix "$name" ;;
-    chore)   finish_chore "$name" ;;
-    hotfix)  finish_hotfix "$name" ;;
-    *)
-      echo -e "${YELLOW}⚠️  Type de branche non reconnu ou non supporté : $branch${RESET}"
-      return 1
-      ;;
-  esac
-}
-
 start_feature() {
   local name="$1"
   if [ -z "$name" ]; then
@@ -101,6 +83,27 @@ start_feature() {
   fi
   create_branch "feature" "$name"
 }
+
+# Fonction finish universelle
+finish() {
+  local type="$1"
+  local name="$2"
+
+  local branch="${type}/${name}"
+  local label="${type}(${name})"
+
+  echo -e "${GREEN}🔀 Fusion de la branche ${branch} dans main...${RESET}"
+  git checkout main && git pull
+  git merge --no-ff "$branch" -m "$label: merge ${type} into main"
+  git branch -d "$branch"
+  git push origin --delete "$branch" 2>/dev/null || true
+  echo -e "${GREEN}✅ Branche ${branch} fusionnée et supprimée.${RESET}"
+}
+
+finish_feature() { finish feature "$1"; }
+finish_fix()     { finish fix "$1"; }
+finish_chore()   { finish chore "$1"; }
+finish_hotfix()  { finish hotfix "$1"; }
 
 function sync_branch() {
   git fetch origin
@@ -148,7 +151,7 @@ case "$1" in
     ;;
   finish)
     shift
-    finish
+    finish "$1"
     ;;
   start_feature)
     shift
