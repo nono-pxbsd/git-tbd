@@ -50,23 +50,26 @@ create_branch() {
 
 # Fonction start générique
 start() {
-  # Vérifie fzf
-  if ! command -v fzf >/dev/null; then
-    echo -e "${YELLOW}⚠️  La commande 'fzf' est requise pour cette fonction.${RESET}"
-    return 1
+  local input="$1"
+  local branch_type=""
+  local name=""
+
+  if [[ -n "$input" && "$input" == */* ]]; then
+    branch_type="${input%%/*}"
+    name="${input#*/}"
   fi
 
-  local branch_type=$(printf "%s\n" "${BRANCH_TYPES[@]}" | fzf --prompt="🧭 Type de branche ? > " --height=10%)
-  if [[ -z "$branch_type" ]]; then
-    echo -e "${YELLOW}⚠️  Aucune sélection effectuée.${RESET}"
-    return 1
-  fi
-
-  echo -ne "📝 Nom de la branche : "
-  read name
-  if [[ -z "$name" ]]; then
-    echo -e "${YELLOW}⚠️  Tu dois spécifier un nom.${RESET}"
-    return 1
+  # Si aucun type fourni, demande interactive avec fzf
+  if [[ -z "$branch_type" || -z "$name" ]]; then
+    if ! command -v fzf >/dev/null; then
+      echo -e "${YELLOW}⚠️  La commande 'fzf' est requise si aucun argument n'est passé.${RESET}"
+      return 1
+    fi
+    branch_type=$(printf "%s\n" "${BRANCH_TYPES[@]}" | fzf --prompt="🧭 Type de branche ? > " --height=10%)
+    [[ -z "$branch_type" ]] && { echo -e "${YELLOW}⚠️  Aucun type sélectionné.${RESET}"; return 1; }
+    echo -ne "📝 Nom de la branche : "
+    read name
+    [[ -z "$name" ]] && { echo -e "${YELLOW}⚠️  Nom requis.${RESET}"; return 1; }
   fi
 
   create_branch "$branch_type" "$name"
@@ -141,7 +144,7 @@ function open_pr() {
 case "$1" in
   start)
     shift
-    start
+    start "$1"
     ;;
   finish)
     shift
