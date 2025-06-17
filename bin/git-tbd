@@ -142,9 +142,11 @@ finish() {
   label="${type}(${name})"
 
   if [[ "$open_pr" = true ]]; then
-    echo -e "${CYAN}ℹ️  Ouverture d'une pull request pour ${branch}...${RESET}"
-    # 🚧 TODO : intégrer une vraie commande open_pr plus tard
-    echo -e "${GREEN}✅ PR simulée pour ${branch} (fonctionnalité à compléter).${RESET}"
+    publish "$branch" || {
+      echo -e "${RED}❌ Impossible de publier ${branch}, PR annulée.${RESET}"
+      return 1
+    }
+    open_pr "$branch"
     return 0
   fi
 
@@ -157,7 +159,9 @@ finish() {
     git branch -d "$branch"
   fi
 
-  git push origin --delete "$branch" 2>/dev/null || true
+  if branch_exists_remote "$branch"; then
+    git push origin --delete "$branch" 2>/dev/null || true
+  fi
   echo -e "${GREEN}✅ Branche ${branch} fusionnée et supprimée.${RESET}"
 }
 
@@ -168,36 +172,52 @@ function sync_branch() {
   echo -e "${GREEN}🔄 Branche synchronisée avec main.${RESET}"
 }
 
+publish() {
+  local branch="${1:-$(git symbolic-ref --short HEAD)}"
+
+  if ! git rev-parse --verify "$branch" >/dev/null 2>&1; then
+    echo "❌ La branche locale '$branch' n'existe pas."
+    return 1
+  fi
+
+  if branch_exists_remote "$branch"; then
+    echo "✅ La branche '$branch' est déjà publiée sur origin."
+  else
+    echo "📤 Publication de la branche '$branch' vers origin..."
+    git push -u origin "$branch"
+  fi
+}
+
+
 function open_pr() {
   local branch=$(git rev-parse --abbrev-ref HEAD)
 
   branch_type=$(echo "$branch" | cut -d'/' -f1)
   branch_name=${branch#"$branch_type"/}
 
-  case "$branch_type" in
-    feature) prefix="✨ feat" ;;
-    fix)     prefix="🐛 fix" ;;
-    hotfix)  prefix="🚒 hotfix" ;;  # à adapter si tu veux différencier
-    chore)   prefix="🧹 chore" ;;
-    *)
-      echo -e "${YELLOW}⚠️  Tu dois être sur une branche (feature|fix|hotfix|chore)/* pour créer une PR.${RESET}"
-      exit 1
-    ;;
-  esac
+  if [[ -z "${BRANCH_ICONS[$branch_type]}" ]]; then
+    echo -e "${YELLOW}⚠️  Type de branche non supporté : ${branch_type}${RESET}"
+    exit 1
+  fi
 
+  local prefix="${BRANCH_ICONS[$branch_type]}"
   local title="${prefix}(${branch_name})"
   local body="${2:-Pull request automatique depuis \`$branch\` vers \`main\`}"
 
-  # Push si nécessaire
-  git push -u origin "$branch"
+  publish "$branch" || return 1
 
   # Création de la PR via GitHub CLI
   gh pr create --base main --head "$branch" --title "$title" --body "$body"
 
   # Récupération du lien vers la PR
-  local url=$(gh pr view --json url -q ".url")
+  local url=$(gh pr view "$branch" --json url -q ".url")
   echo -e "${GREEN}✅ PR créée depuis $branch vers main${RESET}"
   echo -e "🔗 Lien : ${BOLD}${url}${RESET}"
+}
+
+branch_exists_remote() {
+  local branch="$1"
+  git ls-remote --heads origin "$branch" | grep -q "$branch"
 }
 
 # Dispatcher
@@ -217,6 +237,10 @@ case "$1" in
   pr)
     shift
     open_pr "$@"
+    ;;
+   publish)
+    shift
+    publish "$@"
     ;;
   help | *)
     print_help
