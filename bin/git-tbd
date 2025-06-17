@@ -90,44 +90,77 @@ start() {
 finish() {
   local type=""
   local name=""
-  local current=$(git rev-parse --abbrev-ref HEAD)
+  local branch=""
+  local current=""
+  local open_pr=false
 
-  # Déduction depuis la branche actuelle
+  # Récupération du HEAD
+  current=$(git rev-parse --abbrev-ref HEAD)
+
+  # Vérification présence de --pr
+  for arg in "$@"; do
+    if [[ "$arg" == "--pr" ]]; then
+      open_pr=true
+      set -- "${@/--pr/}" # suppression de l'argument de la liste
+      break
+    fi
+  done
+
+  # Déduction des arguments restants
   if [[ $# -eq 0 ]]; then
-    type="${current%%/*}"
-    name="${current#*/}"
+    # Déduire depuis la branche courante
+    if [[ "$current" == */* ]]; then
+      type="${current%%/*}"
+      name="${current##*/}"
+    else
+      echo -e "${YELLOW}⚠️ Impossible de déterminer type/nom depuis la branche actuelle ($current).${RESET}"
+      return 1
+    fi
   elif [[ $# -eq 1 ]]; then
     if [[ "$1" == */* ]]; then
       type="${1%%/*}"
-      name="${1#*/}"
+      name="${1##*/}"
     else
       type="$1"
-      name="${current#*/}"
+      name="${current##*/}"
     fi
   elif [[ $# -eq 2 ]]; then
     type="$1"
     name="$2"
   else
-    echo -e "${YELLOW}⚠️  Trop d'arguments. Usage : finish [type[/name] | type name]${RESET}"
+    echo -e "${YELLOW}⚠️ Trop d'arguments. Usage : finish [type[/name]] | type name [--pr]${RESET}"
     return 1
   fi
 
   # Validation du type
   if [[ ! "$type" =~ ^(feature|fix|hotfix|chore)$ ]]; then
-    echo -e "${YELLOW}⚠️  Type non supporté : $type${RESET}"
+    echo -e "${YELLOW}⚠️ Type non supporté : ${type}.${RESET}"
     return 1
   fi
 
-  local branch="${type}/${name}"
-  local label="${type}(${name})"
+  branch="${type}/${name}"
+  label="${type}(${name})"
 
-  echo -e "${GREEN}🔁 Fusion de la branche ${branch} dans main...${RESET}"
-  git checkout main && git pull
-  git merge --no-ff "$branch" -m "$label: merge ${type} into main"
-  git branch -d "$branch"
+  if [[ "$open_pr" = true ]]; then
+    echo -e "${CYAN}ℹ️  Ouverture d'une pull request pour ${branch}...${RESET}"
+    # 🚧 TODO : intégrer une vraie commande open_pr plus tard
+    echo -e "${GREEN}✅ PR simulée pour ${branch} (fonctionnalité à compléter).${RESET}"
+    return 0
+  fi
+
+  # Merge et suppression
+  echo -e "${GREEN}🔀 Fusion de la branche ${branch} dans main...${RESET}"
+  git checkout main && git pull || return 1
+  git merge --no-ff "$branch" -m "$label: merge ${type} into main" || return 1
+
+  if git show-ref --verify --quiet "refs/heads/${branch}"; then
+    git branch -d "$branch"
+  fi
+
   git push origin --delete "$branch" 2>/dev/null || true
   echo -e "${GREEN}✅ Branche ${branch} fusionnée et supprimée.${RESET}"
 }
+
 
 function sync_branch() {
   git fetch origin
