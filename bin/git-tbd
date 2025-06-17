@@ -10,11 +10,22 @@ RESET="\e[0m"
 # Définition des types et icônes
 BRANCH_TYPES=("feature" "fix" "hotfix" "chore")
 declare -A BRANCH_ICONS=(
-  [feature]="✨ feat"
-  [fix]="🐛 fix"
-  [hotfix]="🚑 hotfix"
-  [chore]="🧹 chore"
+  [feature]="✨"
+  [fix]="🐛"
+  [chore]="🧹"
+  [refactor]="🔨"
+  [test]="✅"
+  [doc]="📚"
 )
+
+# Chargement des fonctions de branche dynamique
+source "${BASH_SOURCE%/*}/../lib/branches.sh"
+
+get_branch_icon() {
+  local type="$1"
+  echo "${BRANCH_ICONS[$type]}"
+}
+
 
 function print_help() {
   echo -e "${BOLD}git-tbd${RESET} - CLI pour workflow Trunk-Based Development\n"
@@ -73,15 +84,6 @@ start() {
   fi
 
   create_branch "$branch_type" "$name"
-}
-
-start_feature() {
-  local name="$1"
-  if [ -z "$name" ]; then
-    echo -e "${YELLOW}⚠️  Tu dois spécifier un nom de feature.${RESET}"
-    exit 1
-  fi
-  create_branch "feature" "$name"
 }
 
 # Fonction finish universelle
