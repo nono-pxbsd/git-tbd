@@ -17,10 +17,17 @@ GREEN="\e[32m"
 YELLOW="\e[33m"
 RESET="\e[0m"
 
+# Chemins des répertoires
+# SCRIPT_DIR est le répertoire où se trouve ce script
+# ROOT_DIR est le répertoire racine du projet
+# Ces variables sont utilisées pour charger les bibliothèques et les scripts nécessaires
+SCRIPT_PATH="$(readlink -f "$0")"
+SCRIPT_DIR="$(dirname "$SCRIPT_PATH")"
+
 # Chargement des bibliothèques
-source "${BASH_SOURCE%/*}/../lib/utils.sh"
-source "${BASH_SOURCE%/*}/../lib/branches.sh"
-source "${BASH_SOURCE%/*}/../lib/commands.sh"
+source "${SCRIPT_DIR}/../lib/utils.sh"
+source "${SCRIPT_DIR}/../lib/branches.sh"
+source "${SCRIPT_DIR}/../lib/commands.sh"
 
 # Génération des fonctions de démarrage pour chaque type de branche
 # Chaque type de branche (feature, fix, hotfix, chore) aura une fonction dédiée
