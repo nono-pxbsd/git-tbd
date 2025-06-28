@@ -29,6 +29,10 @@ source "${SCRIPT_DIR}/../lib/utils.sh"
 source "${SCRIPT_DIR}/../lib/branches.sh"
 source "${SCRIPT_DIR}/../lib/commands.sh"
 
+
+# Load la configuration git-tbd
+load_git_tbd_config
+
 # Génération des fonctions de démarrage pour chaque type de branche
 # Chaque type de branche (feature, fix, hotfix, chore) aura une fonction dédiée
 # Ces fonctions sont générées dynamiquement pour éviter la répétition de code
@@ -68,13 +72,21 @@ case "$1" in
     shift
     start_feature "$1"
     ;;
+   publish)
+    shift
+    publish "$@"
+    ;;
   pr)
     shift
     open_pr "$@"
     ;;
-   publish)
+  sync)
     shift
-    publish "$@"
+    sync_branch_to_remote "$@"
+    ;;
+  validate)
+    shift
+    validate_pr "$@"
     ;;
   help | *)
     print_help

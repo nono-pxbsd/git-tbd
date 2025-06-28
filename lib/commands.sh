@@ -101,9 +101,9 @@ finish() {
   branch="${type}/${name}"
   label="${type}(${name})"
 
-  if [[ "$open_pr" = true ]]; then
-    publish "$branch" || {
-      echo -e "${RED}❌ Impossible de publier ${branch}, PR annulée.${RESET}"
+  if [[ "$open_pr" == true ]]; then
+    validate_pr "$branch" || {
+      echo -e "${RED}❌ Échec de validation de la branche ${branch}, PR annulée.${RESET}"
       return 1
     }
     open_pr "$branch"
@@ -118,72 +118,191 @@ finish() {
   if git show-ref --verify --quiet "refs/heads/${branch}"; then
     git branch -d "$branch"
   fi
+  
+  delete_remote_branch "$branch"
 
-  if remote_branch_exists  "$branch"; then
-    git push origin --delete "$branch" 2>/dev/null || true
-  fi
   echo -e "${GREEN}✅ Branche ${branch} fusionnée et supprimée.${RESET}"
 }
 
 # Commande pour publier une branche
-# Publie la branche courante vers origin si elle n'est pas déjà publiée
+# Publie la branche courante vers l'origin
 # Si un argument est passé, il est utilisé comme nom de branche
 # Si aucun argument n'est passé, utilise la branche courante
 # Si la branche n'existe pas, affiche un message d'erreur
-# Si la branche existe déjà sur origin, affiche un message d'information
-# Si la branche n'existe pas sur origin, la publie et configure le suivi
+# Si la branche est propre, publie la branche
+# Si la branche n'est pas propre, affiche un message d'erreur
+# Si la branche est déjà synchronisée avec l'origin, affiche un message d'information
+# Si la branche n'est pas synchronisée, synchronise la branche avec l'origin
+# Si la synchronisation échoue, affiche un message d'erreur
 # Si la branche est publiée avec succès, affiche un message de succès
+# Si la branche n'est pas publiée, affiche un message d'erreur
 publish() {
+  local force=false
   local branch="${1:-$(git symbolic-ref --short HEAD)}"
 
-  if ! git rev-parse --verify "$branch" >/dev/null 2>&1; then
-    echo "❌ La branche locale '$branch' n'existe pas."
+  # Gère les arguments comme --force
+  for arg in "$@"; do
+    case "$arg" in
+      --force) force=true ;;
+    esac
+  done
+
+  if ! local_branch_exists "$branch"; then
+    echo -e "${RED}✘ La branche locale '$branch' n'existe pas.${RESET}"
     return 1
   fi
 
-  if remote_branch_exists  "$branch"; then
-    echo "✅ La branche '$branch' est déjà publiée sur origin."
+  if is_branch_clean "$branch"; then
+    echo "✅ La branche "$branch" est propre."
   else
-    sync_current_branch --force || return 1
-    echo "📤 Publication de la branche '$branch' vers origin..."
-    git push -u origin "$branch"
-  fi
-}
-
-# Commande pour ouvrir une Pull Request GitHub
-# Ouvre une PR depuis la branche courante vers main
-# Si un argument est passé, il est utilisé comme corps de la PR
-# Si aucun argument n'est passé, utilise un corps par défaut
-# Si la branche courante n'existe pas, affiche un message d'erreur
-# Si la branche courante n'est pas publiée, publie la branche avant d'ouvrir la PR
-# Si la PR est créée avec succès, affiche un message de succès et le lien
-# Si la PR ne peut pas être créée, affiche un message d'erreur
-# Utilise GitHub CLI pour créer la PR
-# Si GitHub CLI n'est pas installé, affiche un message d'erreur
-# Si la branche courante n'est pas de type supporté, affiche un message d'avertissement
-# Si la PR est créée, affiche le lien vers la PR
-function open_pr() {
-  local branch=$(git rev-parse --abbrev-ref HEAD)
-
-  branch_type=$(echo "$branch" | cut -d'/' -f1)
-  branch_name=${branch#"$branch_type"/}
-
-  if [[ -z "${BRANCH_ICONS[$branch_type]}" ]]; then
-    echo -e "${YELLOW}⚠️  Type de branche non supporté : ${branch_type}${RESET}"
+    echo "❌ La branche "$branch" n’est pas propre ou impossible à vérifier."
     exit 1
   fi
 
-  local prefix="${BRANCH_ICONS[$branch_type]}"
-  local title="${prefix}(${branch_name})"
+  if ! branch_is_sync "$branch"; then
+    local status
+    status=$(get_branch_sync_status "$branch")
+
+    if [[ "$status" == "behind" && "$force" == true ]]; then
+      sync_branch_to_remote --force "$branch" || return 1
+    else
+      sync_branch_to_remote "$branch" || return 1
+    fi
+  fi
+
+  echo -e "${BLUE}🚀 Publication de la branche '$branch' vers origin...${RESET}"
+  git push -u origin "$branch" || return 1
+
+  echo -e "${GREEN}✅ Branche publiée avec succès.${RESET}"
+}
+
+# Commande pour ouvrir une Pull Request sur Github
+# Ouvre une PR depuis la branche courante vers main
+# Si un argument est passé, il est utilisé comme nom de branche
+# Si aucun argument n'est passé, utilise la branche courante
+# Si la branche n'est pas une branche de travail valide, affiche un message d'avertissement
+# Si la branche est valide, publie la branche et ouvre une PR
+# Si la PR est créée avec succès, affiche un message de succès avec le lien vers la PR
+# Si la PR échoue, affiche un message d'erreur
+# Utilise gh pr create pour créer la PR
+# Utilise gh pr view pour obtenir l'URL de la PR créée
+# Si gh pr create échoue, affiche un message d'erreur
+# Si gh pr view échoue, affiche un message d'erreur
+# Si la PR est créée, affiche un message de succès avec le lien vers la PR
+open_pr() {
+  local input="$1"
+  local branch=""
+  local type=""
+  local name=""
+
+  if [[ -n "$input" ]]; then
+    parse_branch_input "$input"
+    type="$PARSED_TYPE"
+    name="$PARSED_NAME"
+    branch="$type/$name"
+  else
+    branch="$(git branch --show-current)"
+    type="${branch%%/*}"
+    name="${branch#*/}"
+  fi
+
+  if ! is_valid_work_branch "$type" "$name"; then
+    echo -e "${YELLOW}⚠️  La branche '$branch' n'est pas une branche de travail valide.${RESET}"
+    return 1
+  fi
+
+  local prefix="${BRANCH_ICONS[$type]}"
+  local title="${prefix}${name}"
   local body="${2:-Pull request automatique depuis \`$branch\` vers \`main\`}"
 
   publish "$branch" || return 1
 
-  # Création de la PR via GitHub CLI
+  echo -e "🔁 Création de la PR via GitHub CLI..."
   gh pr create --base main --head "$branch" --title "$title" --body "$body"
 
-  # Récupération du lien vers la PR
-  local url=$(gh pr view "$branch" --json url -q ".url")
-  echo -e "${GREEN}✅ PR créée depuis $branch vers main${RESET}"
+  local url
+  url=$(gh pr view "$branch" --json url -q ".url")
+
+  echo -e "${GREEN}✅ PR créée depuis ${CYAN}$branch${GREEN} vers main.${RESET}"
   echo -e "🔗 Lien : ${BOLD}${url}${RESET}"
 }
+
+
+validate_pr() {
+  local branch="$1"
+  local current_branch
+  current_branch=$(git rev-parse --abbrev-ref HEAD)
+
+  # Détection de la branche cible
+  if [[ -z "$branch" ]]; then
+    branch="$current_branch"
+  fi
+
+  echo "🔍 Validation de la PR pour la branche : $branch"
+
+  # Extraire le type et le nom via parse_branch_input
+  local branch_type name
+  if ! parse_branch_input "$branch"; then
+    echo -e "${YELLOW}⚠️ Format de branche invalide. Attendu : type/nom${RESET}"
+    return 1
+  fi
+
+  # On utilise les variables globales définies dans parse_branch_input
+  branch_type="$branch_type"
+  name="$name"
+
+  # Vérification de la branche
+  if ! is_valid_work_branch "$branch"; then
+    return 1
+  fi
+
+  # Vérifier si une PR existe
+  echo "🔄 Vérification de l'existence d'une PR..."
+  if ! gh pr view "$branch" &>/dev/null; then
+    echo "❌ Aucune Pull Request trouvée pour la branche '$branch'."
+    echo "💡 Créez une PR avec : git-tbd open_pr $branch"
+    return 1
+  fi
+
+  # Vérifier que la branche locale est bien synchronisée avec l'origin
+  echo "🔄 Vérification de la synchronisation avec la remote..."
+  git fetch origin "$branch" &>/dev/null
+
+  local ahead behind
+  ahead=$(git rev-list --left-right --count "$branch"...origin/"$branch" | awk '{print $1}')
+  behind=$(git rev-list --left-right --count "$branch"...origin/"$branch" | awk '{print $2}')
+
+  if [[ "$ahead" -gt 0 && "$behind" -gt 0 ]]; then
+    echo "⚠️  La branche '$branch' est désynchronisée (en avance ET en retard)."
+    echo "💡 Résolvez les conflits avec un rebase ou un merge :"
+    echo "    git fetch origin && git rebase origin/$branch"
+    return 1
+  elif [[ "$ahead" -gt 0 ]]; then
+    echo "⚠️  La branche '$branch' est en avance sur origin/$branch."
+    echo "💡 Faites un publish : git-tbd publish $branch"
+    return 1
+  elif [[ "$behind" -gt 0 ]]; then
+    echo "⚠️  La branche '$branch' est en retard sur origin/$branch."
+    echo "💡 Mettez à jour avec : git pull ou git fetch && git rebase origin/$branch"
+    return 1
+  fi
+
+  echo "✅ La branche est synchronisée avec la remote."
+
+  # Afficher les détails et proposer la validation
+  echo "📋 Résumé de la PR :"
+  gh pr view "$branch" --web
+
+  echo
+  read -r -p "🚀 Souhaitez-vous valider (merger) la PR ? [y/N] " confirm
+  if [[ "$confirm" =~ ^[Yy]$ ]]; then
+    echo "🔧 Validation en cours..."
+    gh pr merge "$branch" --squash --delete-branch
+    echo "✅ PR validée et branche supprimée."
+  else
+    echo "❌ Validation annulée par l'utilisateur."
+  fi
+}
+
+
+
