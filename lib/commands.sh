@@ -228,35 +228,60 @@ open_pr() {
 }
 
 
+# Commande pour valider une Pull Request
+# Valide une PR en vérifiant la propreté de la branche, son existence et sa synchronisation
+# Si un argument est passé, il est utilisé comme nom de branche
+# Si aucun argument n'est passé, utilise la branche courante
+# Si la branche n'existe pas, affiche un message d'erreur
+# Si la branche n'est pas propre, affiche un message d'erreur
+# Si la PR n'existe pas, affiche un message d'erreur
+# Si la branche n'est pas synchronisée avec l'origin, affiche un message d'avertissement
+# Si la branche est synchronisée, affiche un résumé de la PR
+# Si l'utilisateur confirme, valide la PR avec le mode de fusion spécifié (squash, merge, rebase)
+# Si l'utilisateur refuse, annule la validation
 validate_pr() {
-  local branch="$1"
+  local branch=""
+  local merge_mode="squash"
+  local assume_yes=false
+  local force_sync=false
+
   local current_branch
   current_branch=$(git rev-parse --abbrev-ref HEAD)
 
+  # -- Parsing des arguments
+  local args=()
+  for arg in "$@"; do
+    case "$arg" in
+      --merge-mode=*) merge_mode="${arg#*=}" ;;
+      -y|--assume-yes) assume_yes=true ;;
+      --force-sync) force_sync=true ;;
+      -*) ;;  # ignore les options inconnues
+      *) args+=("$arg") ;;  # arguments restants (ex. : nom de branche)
+    esac
+  done
+
   # Détection de la branche cible
-  if [[ -z "$branch" ]]; then
+  if [[ ${#args[@]} -gt 0 ]]; then
+    branch="${args[0]}"
+  else
     branch="$current_branch"
   fi
 
-  echo "🔍 Validation de la PR pour la branche : $branch"
+  echo "🔍 Validation de la PR sur branche : $branch"
 
-  # Extraire le type et le nom via parse_branch_input
-  local branch_type name
-  if ! parse_branch_input "$branch"; then
-    echo -e "${YELLOW}⚠️ Format de branche invalide. Attendu : type/nom${RESET}"
+  # Vérifie existence de branche
+  if ! local_branch_exists "$branch"; then
+    echo -e "${RED}❌ La branche '$branch' n'existe pas.${RESET}"
     return 1
   fi
 
-  # On utilise les variables globales définies dans parse_branch_input
-  branch_type="$branch_type"
-  name="$name"
-
-  # Vérification de la branche
-  if ! is_valid_work_branch "$branch"; then
+  # Vérifie propreté de la branche
+  if ! is_branch_clean "$branch"; then
+    echo -e "${RED}❌ La branche '$branch' n’est pas propre.${RESET}"
     return 1
   fi
 
-  # Vérifier si une PR existe
+  # Vérifie si une PR existe
   echo "🔄 Vérification de l'existence d'une PR..."
   if ! gh pr view "$branch" &>/dev/null; then
     echo "❌ Aucune Pull Request trouvée pour la branche '$branch'."
@@ -264,41 +289,41 @@ validate_pr() {
     return 1
   fi
 
-  # Vérifier que la branche locale est bien synchronisée avec l'origin
+  # Vérifie que la branche locale est bien synchronisée avec l'origin
   echo "🔄 Vérification de la synchronisation avec la remote..."
   git fetch origin "$branch" &>/dev/null
 
-  local ahead behind
-  ahead=$(git rev-list --left-right --count "$branch"...origin/"$branch" | awk '{print $1}')
-  behind=$(git rev-list --left-right --count "$branch"...origin/"$branch" | awk '{print $2}')
+  # -- Synchronisation éventuelle
+  local status
+  status=$(get_branch_sync_status "$branch")
 
-  if [[ "$ahead" -gt 0 && "$behind" -gt 0 ]]; then
-    echo "⚠️  La branche '$branch' est désynchronisée (en avance ET en retard)."
-    echo "💡 Résolvez les conflits avec un rebase ou un merge :"
-    echo "    git fetch origin && git rebase origin/$branch"
-    return 1
-  elif [[ "$ahead" -gt 0 ]]; then
-    echo "⚠️  La branche '$branch' est en avance sur origin/$branch."
-    echo "💡 Faites un publish : git-tbd publish $branch"
-    return 1
-  elif [[ "$behind" -gt 0 ]]; then
-    echo "⚠️  La branche '$branch' est en retard sur origin/$branch."
-    echo "💡 Mettez à jour avec : git pull ou git fetch && git rebase origin/$branch"
-    return 1
+  if [[ "$status" != "synced" ]]; then
+    echo "⚠️  Branche '$branch' non synchronisée (statut: $status)."
+    if [[ "$force" == true ]]; then
+      echo "🔧 Tentative de synchronisation forcée..."
+      sync_branch_to_remote --force "$branch" || return 1
+    else
+      echo "💡 Corrigez cela avec : git-tbd publish $branch"
+      return 1
+    fi
   fi
 
-  echo "✅ La branche est synchronisée avec la remote."
-
-  # Afficher les détails et proposer la validation
+  # -- Affichage du résumé de PR
+  echo ""
   echo "📋 Résumé de la PR :"
   gh pr view "$branch" --web
 
-  echo
-  read -r -p "🚀 Souhaitez-vous valider (merger) la PR ? [y/N] " confirm
+  # -- Confirmation ou mode automatique
+  if ! $assume_yes; then
+    read -r -p "✅ Souhaitez-vous valider (merger) la PR ? [y/N] " confirm
+  else
+    confirm="y"
+  fi
+
   if [[ "$confirm" =~ ^[Yy]$ ]]; then
-    echo "🔧 Validation en cours..."
-    gh pr merge "$branch" --squash --delete-branch
-    echo "✅ PR validée et branche supprimée."
+    echo "🚀 Validation en cours avec --$merge_mode..."
+    gh pr merge "$branch" --"$merge_mode" --delete-branch
+    echo "🎉 PR validée et branche supprimée."
   else
     echo "❌ Validation annulée par l'utilisateur."
   fi
