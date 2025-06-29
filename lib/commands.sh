@@ -206,7 +206,7 @@ open_pr() {
     name="${branch#*/}"
   fi
 
-  if ! is_valid_work_branch "$type" "$name"; then
+  if ! is_valid_work_branch "$branch"; then
     echo -e "${YELLOW}⚠️  La branche '$branch' n'est pas une branche de travail valide.${RESET}"
     return 1
   fi
