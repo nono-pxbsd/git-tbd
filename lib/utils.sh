@@ -16,8 +16,8 @@ declare -A BRANCH_ICONS=(
 # ------------------------
 load_git_tbd_config() {
   # Branches protégées : ne jamais autoriser de modification directe
-  PROTECTED_BRANCHES=("main" "master" "develop")
+  GIT_TBD_PROTECTED_BRANCHES=("main" "master" "develop")
 
   # Préfixes autorisés : utilisés pour valider les noms de branches
-  BRANCH_PREFIXES=("feature/" "bugfix/" "hotfix/" "release/" "chore/")
+  GIT_TBD_ALLOWED_PREFIXES=("feature/" "bugfix/" "hotfix/" "release/" "chore/")
 }

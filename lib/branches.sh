@@ -251,6 +251,7 @@ is_valid_work_branch() {
   done
 
   for prefix in "${allowed[@]}"; do
+    # Debug
     if [[ "$branch" == "$prefix"* ]]; then
       return 0
     fi
