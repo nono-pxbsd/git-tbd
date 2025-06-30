@@ -160,16 +160,19 @@ publish() {
     exit 1
   fi
 
-  if [[remote_branch_exists "$branch" && ! branch_is_sync "$branch"]]; then
-    local status
-    status=$(get_branch_sync_status "$branch")
+  if remote_branch_exists "$branch"; then
+    if ! branch_is_sync "$branch"; then
+      local status
+      status=$(get_branch_sync_status "$branch")
 
-    if [[ "$status" == "behind" && "$force_sync" == true ]]; then
-      sync_branch_to_remote --force "$branch" || return 1
-    else
-      sync_branch_to_remote "$branch" || return 1
+      if [[ "$status" == "behind" && "$force_sync" == true ]]; then
+        sync_branch_to_remote --force "$branch" || return 1
+      else
+        sync_branch_to_remote "$branch" || return 1
+      fi
     fi
   fi
+  
 
   echo -e "${BLUE}🚀 Publication de la branche '$branch' vers origin...${RESET}"
   if [ "$force_push" == true ]; then
