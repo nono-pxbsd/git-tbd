@@ -160,7 +160,7 @@ publish() {
     exit 1
   fi
 
-  if ! branch_is_sync "$branch"; then
+  if [[remote_branch_exists "$branch" && ! branch_is_sync "$branch"]]; then
     local status
     status=$(get_branch_sync_status "$branch")
 
