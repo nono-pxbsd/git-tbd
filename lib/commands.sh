@@ -143,7 +143,8 @@ publish() {
   # Gère les arguments comme --force
   for arg in "$@"; do
     case "$arg" in
-      --force) force=true ;;
+      --force-sync) force_sync=true ;;
+      --force-push) force_push=true ;;
     esac
   done
 
@@ -159,19 +160,26 @@ publish() {
     exit 1
   fi
 
-  if ! branch_is_sync "$branch"; then
-    local status
-    status=$(get_branch_sync_status "$branch")
+  if remote_branch_exists "$branch"; then
+    if ! branch_is_sync "$branch"; then
+      local status
+      status=$(get_branch_sync_status "$branch")
 
-    if [[ "$status" == "behind" && "$force" == true ]]; then
-      sync_branch_to_remote --force "$branch" || return 1
-    else
-      sync_branch_to_remote "$branch" || return 1
+      if [[ "$status" == "behind" && "$force_sync" == true ]]; then
+        sync_branch_to_remote --force "$branch" || return 1
+      else
+        sync_branch_to_remote "$branch" || return 1
+      fi
     fi
   fi
+  
 
   echo -e "${BLUE}🚀 Publication de la branche '$branch' vers origin...${RESET}"
-  git push -u origin "$branch" || return 1
+  if [ "$force_push" == true ]; then
+    git push -u origin "$branch" --force-with-lease || return 1
+  else
+    git push -u origin "$branch" || return 1
+  fi
 
   echo -e "${GREEN}✅ Branche publiée avec succès.${RESET}"
 }
@@ -237,11 +245,11 @@ open_pr() {
 # Si la PR n'existe pas, affiche un message d'erreur
 # Si la branche n'est pas synchronisée avec l'origin, affiche un message d'avertissement
 # Si la branche est synchronisée, affiche un résumé de la PR
-# Si l'utilisateur confirme, valide la PR avec le mode de fusion spécifié (squash, merge, rebase)
+# Si l'utilisateur confirme, valide la PR avec le mode de fusion spécifié (local-squash, squash, merge)
 # Si l'utilisateur refuse, annule la validation
 validate_pr() {
   local branch=""
-  local merge_mode="squash"
+  local merge_mode="merge"
   local assume_yes=false
   local force_sync=false
 
@@ -315,18 +323,58 @@ validate_pr() {
 
   # -- Confirmation ou mode automatique
   if ! $assume_yes; then
-    read -r -p "✅ Souhaitez-vous valider (merger) la PR ? [y/N] " confirm
+    read -r -p "✅ Souhaitez-vous valider (merger) la PR ? (détection du mode ensuite) [y/N] " confirm
   else
     confirm="y"
   fi
 
-  if [[ "$confirm" =~ ^[Yy]$ ]]; then
-    echo "🚀 Validation en cours avec --$merge_mode..."
-    gh pr merge "$branch" --"$merge_mode" --delete-branch
-    echo "🎉 PR validée et branche supprimée."
-  else
-    echo "❌ Validation annulée par l'utilisateur."
+  if [[ ! "$confirm" =~ ^[Yy]$ ]]; then
+    echo "❌ Validation annulée."
+    return 1
   fi
+
+  local commit_count
+  commit_count=$(get_commit_count_between_branches "origin/main" "$current_branch")
+
+  if [[ "$merge_mode" == "squash" && "$commit_count" -gt 1 ]]; then
+    echo "🔄 Plusieurs commits détectés ($commit_count)."
+    echo "☣️ L'utilisation du mode 'squash' de Github entraina une synchronisation manuelle forcée."
+    echo "💡 Nous vous conseillons l'utilisation du local-squash pour 1 seul commit ou un mode merge classique avec l'ensemble des commits."
+    echo ""
+    if ! $assume_yes; then
+      read -r -p "✅ Souhaitez-vous poursuivre avec un squash Github ? [y/N] " confirm_merge_mode
+      if [[ "$confirm_merge_mode" =~ ^[Nn]$ ]]; then
+        echo "❌ Squash Github annulé."
+        return 1
+      else
+        echo "🔄 Choix du mode de merge : [ local-squash (rebase) | merge ]"
+        read -r -p "✅ Quelle méthode souhaitez vous utiliser ? (laisser vide pour local-squash) : " merge_mode
+        if [[ "$merge_mode" == "merge" ]]; then
+          echo "👉 Choix manuel de la méthode merge"
+        else
+          echo "ℹ️ Utilisation de local-squash par défaut"
+          merge_mode="local-squash"
+        fi
+      fi 
+    else
+      echo "🔄 Choix automatique de la méthode local-squash"
+      merge_mode="local-squash"
+    fi
+  fi
+
+  if [[ "$merge_mode" == "local-squash" ]]; then
+    echo "🔄 Squash local en cours..."
+    squash_commits_to_one "--method=rebase" || return 1
+    echo "✅ Squash local effectué."
+    echo "🔄 Publication de la branche après squash..."
+    publish "$branch" --force-push || return 1
+    echo "✅ Publication de la branche après squash réussie."
+    $merge_mode="merge"
+  fi
+
+  echo "🚀 Validation en cours avec --$merge_mode..."
+  gh pr merge "$branch" --"$merge_mode" --delete-branch
+  echo "🎉 PR validée et branche supprimée."
 }
 
 
