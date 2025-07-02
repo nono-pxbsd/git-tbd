@@ -33,10 +33,6 @@ source "${SCRIPT_DIR}/../lib/commands.sh"
 # Load la configuration git-tbd
 load_git_tbd_config
 
-# Génération des fonctions de démarrage pour chaque type de branche
-# Chaque type de branche (feature, fix, hotfix, chore) aura une fonction dédiée
-# Ces fonctions sont générées dynamiquement pour éviter la répétition de code
-generate_start_functions
 
 # Fonction d'aide pour afficher les commandes disponibles
 # Affiche un message d'aide avec la liste des commandes disponibles et leur usage
@@ -54,7 +50,8 @@ function print_help() {
   echo "  git-tbd finish             → Merge dans main + suppression de la branche"
   echo "  git-tbd sync               → Met à jour la branche courante depuis main"
   echo "  git-tbd pr                 → Ouvre une Pull Request automatiquement"
-  echo "  git-tbd bump <type>        → Bump la version (major, minor, patch)"
+  echo "  git-tbd validate           → Valide une Pull Request avec différentes méthodes de merge"
+  #echo "  git-tbd bump <type>        → Bump la version (major, minor, patch)"
   echo "  git-tbd help               → Affiche cette aide"
 }
 
@@ -68,11 +65,7 @@ case "$1" in
     shift
     finish "$@"
     ;;
-  start_feature)
-    shift
-    start_feature "$1"
-    ;;
-   publish)
+  publish)
     shift
     publish "$@"
     ;;
@@ -80,13 +73,13 @@ case "$1" in
     shift
     open_pr "$@"
     ;;
-  sync)
-    shift
-    sync_branch_to_remote "$@"
-    ;;
   validate)
     shift
     validate_pr "$@"
+    ;;
+  sync)
+    shift
+    sync_branch_to_remote "$@"
     ;;
   help | *)
     print_help

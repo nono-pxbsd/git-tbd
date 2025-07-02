@@ -1,8 +1,5 @@
 #!/bin/bash
 
-
-
-
 # Crée une branche à partir du type et du nom
 # Usage : create_branch <type> <name>
 # Exemple : create_branch feature my-feature
@@ -15,68 +12,29 @@
 create_branch() {
   local type="$1"
   local name="$2"
+  local base_branch="main"
 
   if [[ -z "$type" || -z "$name" ]]; then
     echo -e "${YELLOW}⚠️  Type ou nom de branche manquant.${RESET}"
     return 1
   fi
 
-  # Bascule sur main à jour
-  git checkout main &>/dev/null || {
-    echo -e "${YELLOW}⚠️  La branche main est introuvable.${RESET}"
+  if git show-ref --verify --quiet "refs/heads/${type}/${name}"; then
+    echo -e "${YELLOW}⚠️  La branche '${type}/${name}' existe déjà.${RESET}"
+    return 1
+  fi
+
+  git checkout "$base_branch" &>/dev/null || {
+    echo -e "${YELLOW}⚠️  La branche ${base_branch} est introuvable.${RESET}"
     return 1
   }
+
   git pull &>/dev/null
 
   local full_branch="${type}/${name}"
   git checkout -b "$full_branch"
+
   echo -e "${GREEN}✅ Branche créée : ${full_branch}${RESET}"
-}
-
-# Génération des fonctions de démarrage pour chaque type de branche
-# Usage : start_feature my-feature
-# Exemple : start_feature my-feature
-generate_start_functions() {
-    for type in "${!BRANCH_TYPES[@]}"; do
-    eval "
-    start_${type}() {
-        local name=\"\$1\"
-        if [[ -z \"\$name\" ]]; then
-        echo -e \"\${YELLOW}⚠️  Tu dois spécifier un nom de ${type}.\${RESET}\"
-        exit 1
-        fi
-        create_branch \"${type}\" \"\$name\"
-    }
-    "
-    done
-}
-
-# Fonction pour obtenir l'icône associée à un type de branche
-# Usage : get_branch_icon <type>
-# Exemple : get_branch_icon feature
-# Retourne l'icône associée au type de branche, ou une chaîne vide si le type n'est pas reconnu
-# Utilise un tableau associatif pour stocker les icônes
-# Si le type n'est pas reconnu, retourne une chaîne vide
-# Utilise les icônes définies dans BRANCH_ICONS pour chaque type de branche
-# Si l'icône n'est pas définie, retourne une chaîne vide
-get_branch_icon() {
-  local type="$1"
-  local icon="${BRANCH_ICONS[$type]}"
-  [[ -n "$icon" ]] && echo "$icon"
-}
-
-
-# Fonction pour obtenir les types de branches supportés
-# Retourne une liste des types de branches supportés
-# Usage : get_branch_types
-# Retourne les types de branches sous forme de tableau
-# Utilise les préfixes définis dans BRANCH_PREFIXES pour générer la liste
-get_branch_types() {
-  local types=()
-  for prefix in "${BRANCH_PREFIXES[@]}"; do
-    types+=("${prefix%/}")
-  done
-  echo "${types[@]}"
 }
 
 # Fonction pour analyser l'entrée de branche
@@ -312,4 +270,39 @@ is_branch_clean() {
   return 0
 }
 
+is_valid_branch_name() {
+  local name="$1"
 
+  # Refuse les noms vides ou trop courts
+  if [[ -z "$name" || ${#name} -lt 3 ]]; then
+    return 1
+  fi
+
+  # Interdits Git + caractères exotiques
+  if [[ "$name" =~ [\ ~^:?*\[\\\]@{}] ]]; then
+    return 1
+  fi
+
+  # Interdiction des doubles slash, tirets en début ou fin, etc.
+  if [[ "$name" =~ (^[-/]|[-/]$|//|--) ]]; then
+    return 1
+  fi
+
+  return 0
+}
+
+normalize_branch_name() {
+  local raw="$1"
+  local slug
+
+  slug=$(echo "$raw" \
+    | iconv -f utf-8 -t ascii//TRANSLIT 2>/dev/null \
+    | tr '[:upper:]' '[:lower:]' \
+    | sed -E 's/[^a-z0-9]+/-/g' \
+    | sed -E 's/^-+|-+$//g' \
+    | sed -E 's/--+/-/g')
+
+  [[ -z "$slug" ]] && slug="branch-$(date +%s)"
+
+  echo "$slug"
+}
