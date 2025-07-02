@@ -9,24 +9,40 @@ start() {
   local branch_type=""
   local name=""
 
+  # 🔹 Si un nom est passé directement sous forme "prefix/nom"
   if [[ -n "$input" && "$input" == */* ]]; then
     branch_type="${input%%/*}"
     name="${input#*/}"
   fi
 
-  # Si aucun type fourni, demande interactive avec fzf
-  if [[ -z "$branch_type" || -z "$name" ]]; then
-    if ! command -v fzf >/dev/null; then
-      echo -e "${YELLOW}⚠️  La commande 'fzf' est requise si aucun argument n'est passé.${RESET}"
-      return 1
-    fi
-    branch_type=$(printf "%s\n" "${BRANCH_TYPES[@]}" | fzf --prompt="🧭 Type de branche ? > " --height=10%)
-    [[ -z "$branch_type" ]] && { echo -e "${YELLOW}⚠️  Aucun type sélectionné.${RESET}"; return 1; }
-    echo -ne "📝 Nom de la branche : "
-    read name
-    [[ -z "$name" ]] && { echo -e "${YELLOW}⚠️  Nom requis.${RESET}"; return 1; }
+  # 🔸 Vérifie que l’état Git est propre
+  if ! is_branch_clean; then
+    echo -e "${YELLOW}⚠️  Tu dois d’abord nettoyer ton état Git avant de créer une nouvelle branche.${RESET}"
+    return 1
   fi
 
+  # 🔹 Si aucun type ou nom, propose via fzf
+  if [[ -z "$branch_type" || -z "$name" ]]; then
+    if ! command -v fzf >/dev/null; then
+      echo -e "${YELLOW}⚠️  La commande 'fzf' est requise si aucun argument n’est passé.${RESET}"
+      return 1
+    fi
+
+    branch_type=$(printf "%s\n" "${!BRANCH_TYPES[@]}" | fzf --prompt="🌟 Type de branche ? > " --height=10%)
+    [[ -z "$branch_type" ]] && echo -e "${YELLOW}⚠️  Aucun type sélectionné.${RESET}" && return 1
+
+    read -rp "📝 Nom de la branche : " name
+    [[ -z "$name" ]] && echo -e "${YELLOW}⚠️  Nom requis.${RESET}" && return 1
+  fi
+
+  # 🔸 Nettoyage et validation du nom
+  if ! is_valid_branch_name "$name"; then
+    local original="$name"
+    name=$(normalize_branch_name "$name")
+    echo -e "${YELLOW}⚠️  Nom de branche invalide : '${original}' → corrigé en '${name}'.${RESET}"
+  fi
+
+  # ✅ Création
   create_branch "$branch_type" "$name"
 }
 
@@ -249,7 +265,7 @@ open_pr() {
 # Si l'utilisateur refuse, annule la validation
 validate_pr() {
   local branch=""
-  local merge_mode="merge"
+  local merge_mode="squash"
   local assume_yes=false
   local force_sync=false
 

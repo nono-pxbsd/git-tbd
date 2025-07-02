@@ -7,9 +7,15 @@ declare -A BRANCH_ICONS=(
   [chore]="🧹"
   [refactor]="♻️"
   [release]="📦"
-  [test]="✅"
+  [test]="🧪"
   [doc]="📚"
 )
+
+get_branch_icon() {
+  local type="$1"
+  local icon="${BRANCH_ICONS[$type]}"
+  [[ -n "$icon" ]] && echo "$icon"
+}
 
 # ------------------------
 # Configuration Git-TBD
@@ -19,7 +25,7 @@ load_git_tbd_config() {
   GIT_TBD_PROTECTED_BRANCHES=("main" "master" "develop")
 
   # Préfixes autorisés : utilisés pour valider les noms de branches
-  GIT_TBD_ALLOWED_PREFIXES=("feature/" "bugfix/" "hotfix/" "release/" "chore/")
+  GIT_TBD_ALLOWED_PREFIXES=("bugfix/" "chore/" "doc/" "feature/" "fix/" "hotfix/" "refactor/" "release/"  "test/")
 }
 
 get_commit_count_between_branches() {
@@ -29,8 +35,25 @@ get_commit_count_between_branches() {
 }
 
 squash_commits_to_one() {
-  local method="${1:-rebase}" # méthode par défaut : rebase
-  local base_branch="${2:-main}"
+   # Valeurs par défaut
+  local method="rebase"
+  local base_branch="main"
+
+  # Parse arguments nommés
+  for arg in "$@"; do
+    case "$arg" in
+      --method=*)
+        method="${arg#*=}"
+        ;;
+      --base=*)
+        base_branch="${arg#*=}"
+        ;;
+      *)
+        echo "❌ Argument inconnu : $arg"
+        return 1
+        ;;
+    esac
+  done
 
   local merge_base
   merge_base=$(git merge-base "$base_branch" HEAD)
