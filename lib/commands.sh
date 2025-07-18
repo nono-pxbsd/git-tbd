@@ -46,98 +46,83 @@ start() {
   create_branch "$branch_type" "$name"
 }
 
-# Commande pour terminer une branche
-# Fusionne la branche dans main et la supprime
-# Si --pr est passé, ouvre une PR sur GitHub
-# Si aucun argument n'est passé, déduit le type et le nom depuis la branche courante
-# Si un argument est passé, il peut être de la forme type/name ou juste type
-# Si deux arguments sont passés, ils sont considérés comme type et nom
-# Si la branche courante est de type feature, fix, hotfix ou chore, elle est utilisée pour déduire le type et le nom
-# Si la branche courante n'est pas de type supporté, affiche un message d'erreur
-# Si la branche courante est de type supporté, fusionne et supprime la branche
-# Si --pr est passé, ouvre une PR sur GitHub après avoir publié la branche
-# Si la branche courante n'existe pas, affiche un message d'erreur
-# Si la branche courante existe mais n'est pas publiée, publie la branche avant de fusionner
-# Si la branche courante est déjà fusionnée, affiche un message d'information
-# Si la branche courante est fusionnée avec succès, affiche un message de succès
-# Si la branche courante est fusionnée mais ne peut pas être supprimée, affiche un message d'avertissement
-# Si la branche courante est fusionnée mais ne peut pas être supprimée à distance, affiche un message d'avertissement
-# Si la branche courante est fusionnée et supprimée avec succès, affiche un message de succès
-finish() {
-  local type=""
-  local name=""
-  local branch=""
-  local current=""
-  local open_pr=false
 
-  # Récupération du HEAD
+finish() {
+  local branch_input="" branch_type="" branch_name="" branch="" current=""
+  local method="$DEFAULT_MERGE_METHOD"
+  local open_pr="$OPEN_PR"
+  local silent="$SILENT_MODE"
+  local commit_msg=""
+
   current=$(git rev-parse --abbrev-ref HEAD)
 
-  # Vérification présence de --pr
-  for arg in "$@"; do
-    if [[ "$arg" == "--pr" ]]; then
-      open_pr=true
-      set -- "${@/--pr/}" # suppression de l'argument de la liste
-      break
-    fi
+  # -- Extraction des arguments
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --pr|-p) open_pr=true ;;
+      --silent|-s) silent=true ;;
+      --method=*) method="${1#*=}" ;;
+      --message=*) commit_msg="${1#*=}" ;;
+      *)  # Premier argument positionnel = branche
+          if [[ -z "$branch_input" ]]; then
+            branch_input="$1"
+          else
+            echo -e "${YELLOW}⚠️  Trop d'arguments. Usage : finish [type/name] [--pr] [--silent] [--method=...] [--message=...]${RESET}"
+            return 1
+          fi
+          ;;
+    esac
+    shift
   done
 
-  # Déduction des arguments restants
-  if [[ $# -eq 0 ]]; then
-    # Déduire depuis la branche courante
-    if [[ "$current" == */* ]]; then
-      type="${current%%/*}"
-      name="${current##*/}"
-    else
-      echo -e "${YELLOW}⚠️ Impossible de déterminer type/nom depuis la branche actuelle ($current).${RESET}"
-      return 1
-    fi
-  elif [[ $# -eq 1 ]]; then
-    if [[ "$1" == */* ]]; then
-      type="${1%%/*}"
-      name="${1##*/}"
-    else
-      type="$1"
-      name="${current##*/}"
-    fi
-  elif [[ $# -eq 2 ]]; then
-    type="$1"
-    name="$2"
+  # Récupère le nom et le type de branche depuis l'argument ou la branche courante
+  branch_input="$(get_branch_input_or_current "$branch_input")"
+  if ! parse_branch_input "$branch_input" branch_type branch_name; then
+    return 1
+  fi
+
+  local branch="${branch_type}/${branch_name}"
+
+  echo -e "${BLUE}📍Finalisation de la branche ${branch}.${RESET}"
+  echo -e "Rappel : la branche par défaut est ${DEFAULT_BASE_BRANCH} et la branche courante est ${current} et la branche cible est ${branch}.${RESET}"
+
+  if is_current_branch "$branch" && ! is_branch_clean "$branch"; then
+    echo -e "${YELLOW}⚠️  La branche courante n'est pas propre : ${branch}. Tu dois d'abord la nettoyer.${RESET}"
+    return 1
+  fi
+
+  if ! is_current_branch "$branch" && ! is_branch_clean "$branch"; then
+    echo -e "${YELLOW}⚠️  La branche ${branch} n'est pas propre. Tu dois d'abord de positionner dessus et la nettoyer.${RESET}"
+    return 1
+  fi
+
+  # Génère le titre et le body à partir du message ou par défaut
+  build_commit_message "$branch" "${method:-}" "${silent:-}" "${msg:-}"
+
+  if pr_exists "$branch"; then
+    # PR déjà ouverte → on valide
+    validate_pr "$branch" ${silent:+--assume-yes} || return 1
+
+  elif [[ "$open_pr" == true ]]; then
+    # PR demandée → on ouvre si pas déjà présente, puis on valide
+    open_pr "$branch" || return 1
+    validate_pr "$branch" ${silent:+--assume-yes} || return 1
+
+  elif [[ "$REQUIRE_PR_ON_FINISH" == true ]]; then
+  # Politique globale : PR obligatoire
+    echo -e "${YELLOW}⚠️  Aucune pull request détectée pour ${branch}.${RESET}"
+    echo -e "${YELLOW}❌ La configuration actuelle impose une PR pour finaliser une branche.${RESET}"
+  return 1
+
   else
-    echo -e "${YELLOW}⚠️ Trop d'arguments. Usage : finish [type[/name]] | type name [--pr]${RESET}"
-    return 1
+    # Pas de PR, pas d’exigence → on merge directement
+    $silent || echo -e "${GREEN}✅ Aucun PR détecté ou requis. Finalisation directe.${RESET}"
   fi
 
-  # Validation du type
-  if [[ ! "$type" =~ ^(feature|fix|hotfix|chore)$ ]]; then
-    echo -e "${YELLOW}⚠️ Type non supporté : ${type}.${RESET}"
-    return 1
-  fi
+  merge_mode=$(prepare_merge_mode)
+  [[ $? -ne 0 ]] && return 1
 
-  branch="${type}/${name}"
-  label="${type}(${name})"
-
-  if [[ "$open_pr" == true ]]; then
-    validate_pr "$branch" || {
-      echo -e "${RED}❌ Échec de validation de la branche ${branch}, PR annulée.${RESET}"
-      return 1
-    }
-    open_pr "$branch"
-    return 0
-  fi
-
-  # Merge et suppression
-  echo -e "${GREEN}🔀 Fusion de la branche ${branch} dans main...${RESET}"
-  git checkout main && git pull || return 1
-  git merge --no-ff "$branch" -m "$label: merge ${type} into main" || return 1
-
-  if git show-ref --verify --quiet "refs/heads/${branch}"; then
-    git branch -d "$branch"
-  fi
-  
-  delete_remote_branch "$branch"
-
-  echo -e "${GREEN}✅ Branche ${branch} fusionnée et supprimée.${RESET}"
+  finalize_branch_merge --branch="$branch" --merge-mode="$merge_mode" --via-pr=false
 }
 
 # Commande pour publier une branche
@@ -214,43 +199,30 @@ publish() {
 # Si gh pr view échoue, affiche un message d'erreur
 # Si la PR est créée, affiche un message de succès avec le lien vers la PR
 open_pr() {
-  local input="$1"
-  local branch=""
-  local type=""
-  local name=""
+  local branch_input="$1"
+  local branch_type="" branch_name=""
 
-  if [[ -n "$input" ]]; then
-    parse_branch_input "$input"
-    type="$PARSED_TYPE"
-    name="$PARSED_NAME"
-    branch="$type/$name"
-  else
-    branch="$(git branch --show-current)"
-    type="${branch%%/*}"
-    name="${branch#*/}"
-  fi
-
-  if ! is_valid_work_branch "$branch"; then
-    echo -e "${YELLOW}⚠️  La branche '$branch' n'est pas une branche de travail valide.${RESET}"
+  # Récupère le nom et le type de branche depuis l'argument ou la branche courante
+  branch_input="$(get_branch_input_or_current "$1")"
+  if ! parse_branch_input "$branch_input" branch_type branch_name; then
     return 1
   fi
 
-  local prefix="${BRANCH_ICONS[$type]}"
-  local title="${prefix}${name}"
-  local body="${2:-Pull request automatique depuis \`$branch\` vers \`main\`}"
+  local branch="${branch_type}/${branch_name}"
+  local title="$(get_branch_icon "$branch_type")${branch_name}"
+  local body="${2:-Pull request automatique depuis \`$branch\` vers \`${DEFAULT_BASE_BRANCH}\`}"
 
   publish "$branch" || return 1
 
   echo -e "🔁 Création de la PR via GitHub CLI..."
-  gh pr create --base main --head "$branch" --title "$title" --body "$body"
+  gh pr create --base "$DEFAULT_BASE_BRANCH" --head "$branch" --title "$title" --body "$body"
 
   local url
   url=$(gh pr view "$branch" --json url -q ".url")
 
-  echo -e "${GREEN}✅ PR créée depuis ${CYAN}$branch${GREEN} vers main.${RESET}"
+  echo -e "${GREEN}✅ PR créée depuis ${CYAN}$branch${GREEN} vers ${DEFAULT_BASE_BRANCH}.${RESET}"
   echo -e "🔗 Lien : ${BOLD}${url}${RESET}"
 }
-
 
 # Commande pour valider une Pull Request
 # Valide une PR en vérifiant la propreté de la branche, son existence et sa synchronisation
@@ -352,46 +324,5 @@ validate_pr() {
   local commit_count
   commit_count=$(get_commit_count_between_branches "origin/main" "$current_branch")
 
-  if [[ "$merge_mode" == "squash" && "$commit_count" -gt 1 ]]; then
-    echo "🔄 Plusieurs commits détectés ($commit_count)."
-    echo "☣️ L'utilisation du mode 'squash' de Github entraina une synchronisation manuelle forcée."
-    echo "💡 Nous vous conseillons l'utilisation du local-squash pour 1 seul commit ou un mode merge classique avec l'ensemble des commits."
-    echo ""
-    if ! $assume_yes; then
-      read -r -p "✅ Souhaitez-vous poursuivre avec un squash Github ? [y/N] " confirm_merge_mode
-      if [[ "$confirm_merge_mode" =~ ^[Nn]$ ]]; then
-        echo "❌ Squash Github annulé."
-        return 1
-      else
-        echo "🔄 Choix du mode de merge : [ local-squash (rebase) | merge ]"
-        read -r -p "✅ Quelle méthode souhaitez vous utiliser ? (laisser vide pour local-squash) : " merge_mode
-        if [[ "$merge_mode" == "merge" ]]; then
-          echo "👉 Choix manuel de la méthode merge"
-        else
-          echo "ℹ️ Utilisation de local-squash par défaut"
-          merge_mode="local-squash"
-        fi
-      fi 
-    else
-      echo "🔄 Choix automatique de la méthode local-squash"
-      merge_mode="local-squash"
-    fi
-  fi
-
-  if [[ "$merge_mode" == "local-squash" ]]; then
-    echo "🔄 Squash local en cours..."
-    squash_commits_to_one "--method=rebase" || return 1
-    echo "✅ Squash local effectué."
-    echo "🔄 Publication de la branche après squash..."
-    publish "$branch" --force-push || return 1
-    echo "✅ Publication de la branche après squash réussie."
-    $merge_mode="merge"
-  fi
-
-  echo "🚀 Validation en cours avec --$merge_mode..."
-  gh pr merge "$branch" --"$merge_mode" --delete-branch
-  echo "🎉 PR validée et branche supprimée."
+  finalize_branch_merge --branch="$branch" --merge-mode="$merge_mode" --via-pr=true
 }
-
-
-

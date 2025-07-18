@@ -25,14 +25,10 @@ SCRIPT_PATH="$(readlink -f "$0")"
 SCRIPT_DIR="$(dirname "$SCRIPT_PATH")"
 
 # Chargement des bibliothèques
+source "${SCRIPT_DIR}/../lib/config.sh"
 source "${SCRIPT_DIR}/../lib/utils.sh"
 source "${SCRIPT_DIR}/../lib/branches.sh"
 source "${SCRIPT_DIR}/../lib/commands.sh"
-
-
-# Load la configuration git-tbd
-load_git_tbd_config
-
 
 # Fonction d'aide pour afficher les commandes disponibles
 # Affiche un message d'aide avec la liste des commandes disponibles et leur usage

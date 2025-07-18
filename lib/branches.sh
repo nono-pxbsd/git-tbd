@@ -48,13 +48,67 @@ create_branch() {
 # Si l'entrée est invalide, affiche un message d'erreur et retourne 1
 parse_branch_input() {
   local input="$1"
+  local -n out_type=$2
+  local -n out_name=$3
+
   if [[ "$input" != */* ]]; then
-    echo "⛔ Format de branche invalide : '$input'. Attendu : type/nom"
+    echo -e "${RED}❌ Format de branche invalide : '$input'. Attendu : type/nom${RESET}"
     return 1
   fi
-  branch_type="${input%%/*}"
-  name="${input#*/}"
+
+  local type="${input%%/*}"
+  local name="${input#*/}"
+
+  echo -e "${BLUE}📌parse_branch_input() Type de branche : ${type}, Nom de la branche : ${name}${RESET}"
+
+  if [[ -z "${BRANCH_ICONS[$type]}" ]]; then
+    echo -e "${YELLOW}⚠️ Type de branche non reconnu : '$type'.${RESET}"
+    return 1
+  fi
+  
+  out_type="$type"
+  out_name="$name"
+  return 0
 }
+
+get_branch_input_or_current() {
+  local input="$1"
+
+  if [[ -n "$input" ]]; then
+    echo "$input"
+  else
+    local current_branch
+    current_branch=$(git symbolic-ref --quiet --short HEAD 2>/dev/null)
+
+    if [[ -z "$current_branch" ]]; then
+      echo "❌ Impossible de déterminer la branche courante (HEAD détaché ?)" >&2
+      return 1
+    fi
+
+    echo "$current_branch"
+  fi
+}
+
+
+is_valid_branch_type() {
+  local type="$1"
+  [[ -n "${BRANCH_ICONS[$type]}" ]]
+}
+
+is_current_branch() {
+  local input="$1"
+  local current
+  current="$(git branch --show-current 2>/dev/null)"
+
+  [[ "$input" == "$current" ]]
+}
+
+get_branch_icon() {
+  local type="$1"
+  local icon="${BRANCH_ICONS[$type]}"
+  [[ -n "$icon" ]] && echo "$icon"
+}
+
 
 # Vérifie si une branche locale existe
 # Usage : local_branch_exists <branch>
@@ -194,78 +248,74 @@ sync_branch_to_remote() {
   esac
 }
 
-is_valid_work_branch() {
-  local branch="$1"
+is_branch_clean() {
+    local target_branch="$1"
+    local current_branch
+    current_branch="$(git symbolic-ref --short HEAD)"
 
-  # Conversion chaînes en tableaux
-  IFS=',' read -ra protected <<< "$GIT_TBD_PROTECTED_BRANCHES"
-  IFS=',' read -ra allowed <<< "$GIT_TBD_ALLOWED_PREFIXES"
-
-  for b in "${protected[@]}"; do
-    if [[ "$branch" == "$b" ]]; then
-      echo "❌ '$branch' est une branche protégée. Action refusée."
-      return 1
+    # 1. Si on est déjà sur la branche cible, on vérifie directement
+    if is_current_branch "$target_branch"; then
+        return "$(is_worktree_clean && echo 0 || echo 1)"
     fi
-  done
 
-  for prefix in "${allowed[@]}"; do
-    # Debug
-    if [[ "$branch" == "$prefix"* ]]; then
-      return 0
+    # 2. Sinon, on veut switcher vers une autre branche : vérifie d'abord que l'état courant est propre
+    if ! is_worktree_clean; then
+        echo "❌ La branche courante '${current_branch}' n’est pas propre. Impossible de vérifier '${target_branch}'."
+        return 2
     fi
-  done
 
-  echo "❌ '$branch' n'a pas de préfixe reconnu. Attendu : ${allowed[*]}/*"
-  return 1
+    # 3. Vérifie que la cible existe
+    if ! git rev-parse --verify --quiet "$target_branch" >/dev/null; then
+        echo "❌ La branche cible '${target_branch}' n'existe pas."
+        return 3
+    fi
+
+    # 4. Tente le switch vers la branche cible
+    if ! git checkout "$target_branch" --quiet; then
+        echo "❌ Échec du checkout vers '${target_branch}'."
+        return 4
+    fi
+
+    # 5. Vérifie que la branche cible est propre
+    local result=0
+    if ! is_worktree_clean; then
+        result=1
+    fi
+
+    # 6. Retour à la branche d’origine
+    git checkout "$current_branch" --quiet
+
+    return "$result"
 }
 
-is_branch_clean() {
-  local target_branch="${1:-$(git symbolic-ref --short HEAD)}"
-  local current_branch
-  current_branch=$(git symbolic-ref --short HEAD)
 
-  # Si on vérifie une autre branche, il faut être clean avant de switcher
-  if [[ "$target_branch" != "$current_branch" ]]; then
-    if [[ -n $(git status --porcelain) ]]; then
-      echo "⛔️ Impossible de switcher de branche : l'état actuel n'est pas propre."
-      return 2
-    fi
 
-    # Vérifie que la branche existe localement
-    if ! git rev-parse --verify --quiet "$target_branch" > /dev/null; then
-      echo "❌ La branche '$target_branch' n'existe pas."
-      return 3
-    fi
-
-    # Switch temporairement vers la branche cible
-    git checkout "$target_branch" --quiet
-    local switched=1
-  fi
-
-  # Vérifie : index, worktree, untracked, opérations en cours
+# Vérifie si le répertoire de travail courant est "propre"
+# Retourne 0 si tout est propre, 1 sinon
+is_worktree_clean() {
+  # Fichiers en attente de commit
   if [[ -n $(git diff --cached) ]]; then
     echo "🟠 Des fichiers sont en attente de commit (index)."
-    [[ "$switched" == "1" ]] && git checkout "$current_branch" --quiet
-    return 1
-  fi
-  if [[ -n $(git diff) ]]; then
-    echo "🟠 Des modifications non committées sont présentes."
-    [[ "$switched" == "1" ]] && git checkout "$current_branch" --quiet
-    return 1
-  fi
-  if [[ -n $(git ls-files --others --exclude-standard) ]]; then
-    echo "🟠 Des fichiers non suivis (untracked) sont présents."
-    [[ "$switched" == "1" ]] && git checkout "$current_branch" --quiet
-    return 1
-  fi
-  if [[ -d .git/rebase-merge || -d .git/rebase-apply || -f .git/MERGE_HEAD ]]; then
-    echo "🛑 Une opération Git (rebase ou merge) est en cours."
-    [[ "$switched" == "1" ]] && git checkout "$current_branch" --quiet
     return 1
   fi
 
-  # Revenir à la branche initiale si on a switché
-  [[ "$switched" == "1" ]] && git checkout "$current_branch" --quiet
+  # Fichiers modifiés non indexés
+  if [[ -n $(git diff) ]]; then
+    echo "🟠 Des modifications non committées sont présentes."
+    return 1
+  fi
+
+  # Fichiers non suivis
+  if [[ -n $(git ls-files --others --exclude-standard) ]]; then
+    echo "🟠 Des fichiers non suivis (untracked) sont présents."
+    return 1
+  fi
+
+  # Opérations git en cours (merge, rebase…)
+  if [[ -d .git/rebase-merge || -d .git/rebase-apply || -f .git/MERGE_HEAD ]]; then
+    echo "🟠 Une opération Git (rebase ou merge) est en cours."
+    return 1
+  fi
 
   return 0
 }
