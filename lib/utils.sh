@@ -228,7 +228,7 @@ finalize_branch_merge() {
     echo -e "${GREEN}✅ Fusion de la branche ${branch} dans ${DEFAULT_BASE_BRANCH}...${RESET}"
     git checkout "$DEFAULT_BASE_BRANCH" && git pull || return 1
 
-    git merge --no-ff "$branch" -m "$(build_commit_message "$branch")" || return 1
+    git merge --no-ff "$branch" -m "$(build_commit_message --branch="$branch")" || return 1
 
     if git show-ref --verify --quiet "refs/heads/$branch"; then
       git branch -d "$branch"

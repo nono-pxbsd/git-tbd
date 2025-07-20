@@ -97,7 +97,7 @@ finish() {
   fi
 
   # Génère le titre et le body à partir du message ou par défaut
-  build_commit_message "$branch" "${method:-}" "${silent:-}" "${msg:-}"
+  build_commit_message "$branch" --merge-method="${method:-}" --silent="${silent:-}" --user-msg="${msg:-}"
 
   if pr_exists "$branch"; then
     # PR déjà ouverte → on valide
