@@ -91,36 +91,58 @@ pr_exists() {
 }
 
 build_commit_message() {
-  local branch="$1"
-  local method="$2"
-  local silent="$3"
-  local user_msg="$4"
+  local branch=""
+  local merge_method=""
+  local silent=""
+  local user_msg=""
 
-  local title=""
-  local body=""
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --branch=*)        branch="${1#*=}" ;;
+      --merge-method=*)  merge_method="${1#*=}" ;;
+      --silent=*)        silent="${1#*=}" ;;
+      --user-msg=*)      user_msg="${1#*=}" ;;
+      *) echo "❌ Option inconnue : $1" >&2; return 1 ;;
+    esac
+    shift
+  done
+
+  # Génère les valeurs par défaut
+  local default_title="Merge branch $branch into $DEFAULT_BASE_BRANCH"
+  local default_body
+  default_body=$(git log --pretty=format:"- %s" "$branch" "^$DEFAULT_BASE_BRANCH")
 
   if [[ -n "$user_msg" ]]; then
-    # Message utilisateur fourni
+    # Cas 1 : message explicitement fourni → découpe en titre + body
     title="${user_msg%%$'\n'*}"
     body="${user_msg#"$title"}"
-    body="${body#*$'\n'}"
+    body="${body#"$'\n'"}"
+  elif [[ "$silent" == true ]]; then
+    # Cas 2 : mode silencieux → titre + body auto-générés
+    title="$default_title"
+    body="$default_body"
   else
-    if [[ "$silent" == true ]]; then
-      title="Merge branch '$branch' into $DEFAULT_BASE_BRANCH with method '$method'"
-      body=$(git log --pretty=format:"- %s" "$branch" ^"$DEFAULT_BASE_BRANCH")
-    else
-      local default_title="Merge branch '$branch' into $DEFAULT_BASE_BRANCH"
-      local default_body=$(git log --pretty=format:"- %s" "$branch" ^"$DEFAULT_BASE_BRANCH")
+    # Cas 3 : mode interactif → éditeur avec contenu pré-rempli
+    local tmpfile
+    tmpfile=$(mktemp /tmp/git-commit-msg.XXXXXX)
 
-      echo -e "✍️  Entrez un titre pour le commit (défaut : '$default_title') :"
-      read -r title_input
-      title="${title_input:-$default_title}"
+    {
+      echo "$default_title"
+      echo ""
+      echo "$default_body"
+    } > "$tmpfile"
 
-      echo -e "📝 Entrez un corps de message (laisser vide pour auto-généré)"
-      echo -e "(Entrée vide pour terminer, ou Ctrl+D)"
-      body=$(</dev/stdin)
-      [[ -z "$body" ]] && body="$default_body"
-    fi
+    local editor="${EDITOR:-nano}"
+    echo -e "📝 Ouverture de l’éditeur pour le message de commit (${editor})...\n"
+    "$editor" "$tmpfile"
+
+    title=$(head -n 1 "$tmpfile")
+    body=$(tail -n +2 "$tmpfile")
+
+    rm -f "$tmpfile"
+
+    [[ -z "$title" ]] && title="$default_title"
+    [[ -z "$body" ]] && body="$default_body"
   fi
 
   echo "$title"
