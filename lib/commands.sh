@@ -117,12 +117,10 @@ finish() {
   else
     # Pas de PR, pas d’exigence → on merge directement
     $silent || echo -e "${GREEN}✅ Aucun PR détecté ou requis. Finalisation directe.${RESET}"
+    merge_mode=$(prepare_merge_mode)
+    [[ $? -ne 0 ]] && return 1
+    finalize_branch_merge --branch="$branch" --merge-mode="$merge_mode" --via-pr=false
   fi
-
-  merge_mode=$(prepare_merge_mode)
-  [[ $? -ne 0 ]] && return 1
-
-  finalize_branch_merge --branch="$branch" --merge-mode="$merge_mode" --via-pr=false
 }
 
 # Commande pour publier une branche
