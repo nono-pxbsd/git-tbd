@@ -133,7 +133,7 @@ build_commit_message() {
       echo "$default_body"
     } > "$tmpfile"
 
-    local editor="${EDITOR:-nano}"
+    local editor="${EDITOR:-vim}"
     echo -e "📝 Ouverture de l’éditeur pour le message de commit (${editor})...\n"
     "$editor" "$tmpfile"
 
