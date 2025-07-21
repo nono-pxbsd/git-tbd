@@ -119,6 +119,7 @@ build_commit_message() {
     body="${body#"$'\n'"}"
   elif [[ "$silent" == true ]]; then
     # Cas 2 : mode silencieux → titre + body auto-générés
+    echo -e "--build_commit_msg 🪵 Mode silent = '${silent}'"
     title="$default_title"
     body="$default_body"
   else
@@ -132,7 +133,7 @@ build_commit_message() {
       echo "$default_body"
     } > "$tmpfile"
 
-    local editor="${EDITOR:-nano}"
+    local editor="${EDITOR:-vim}"
     echo -e "📝 Ouverture de l’éditeur pour le message de commit (${editor})...\n"
     "$editor" "$tmpfile"
 
@@ -228,7 +229,8 @@ finalize_branch_merge() {
     echo -e "${GREEN}✅ Fusion de la branche ${branch} dans ${DEFAULT_BASE_BRANCH}...${RESET}"
     git checkout "$DEFAULT_BASE_BRANCH" && git pull || return 1
 
-    git merge --no-ff "$branch" -m "$(build_commit_message --branch="$branch")" || return 1
+    commit_message=$(build_commit_message --branch="$branch")
+    git merge -m "$commit_message" || return 1
 
     if git show-ref --verify --quiet "refs/heads/$branch"; then
       git branch -d "$branch"
