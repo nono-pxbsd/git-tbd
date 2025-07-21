@@ -91,6 +91,7 @@ pr_exists() {
 }
 
 build_commit_message() {
+  # Lecture des arguments via getopt-like parsing
   local branch=""
   local merge_method=""
   local silent=""
@@ -98,32 +99,36 @@ build_commit_message() {
 
   while [[ $# -gt 0 ]]; do
     case "$1" in
-      --branch=*)        branch="${1#*=}" ;;
-      --merge-method=*)  merge_method="${1#*=}" ;;
-      --silent=*)        silent="${1#*=}" ;;
-      --user-msg=*)      user_msg="${1#*=}" ;;
+      --branch=*) branch="${1#*=}" ;;
+      --merge-method=*) merge_method="${1#*=}" ;;
+      --silent=*) silent="${1#*=}" ;;
+      --user-msg=*) user_msg="${1#*=}" ;;
       *) echo "❌ Option inconnue : $1" >&2; return 1 ;;
     esac
     shift
   done
 
-  # Génère les valeurs par défaut
+  # 🪵 DEBUG LOGS
+  echo "[DEBUG] branch         = '$branch'" >&2
+  echo "[DEBUG] merge_method   = '$merge_method'" >&2
+  echo "[DEBUG] silent         = '$silent'" >&2
+  echo "[DEBUG] user_msg       = '$user_msg'" >&2
+
+  # Valeurs par défaut
   local default_title="Merge branch $branch into $DEFAULT_BASE_BRANCH"
-  local default_body
-  default_body=$(git log --pretty=format:"- %s" "$branch" "^$DEFAULT_BASE_BRANCH")
+  local default_body=$(git log --pretty=format:"- %s" "$branch" "^$DEFAULT_BASE_BRANCH")
+
+  local title=""
+  local body=""
 
   if [[ -n "$user_msg" ]]; then
-    # Cas 1 : message explicitement fourni → découpe en titre + body
     title="${user_msg%%$'\n'*}"
-    body="${user_msg#"$title"}"
-    body="${body#"$'\n'"}"
+    body="${user_msg#*$'\n'}"
   elif [[ "$silent" == true ]]; then
-    # Cas 2 : mode silencieux → titre + body auto-générés
-    echo -e "--build_commit_msg 🪵 Mode silent = '${silent}'"
-    title="$default_title"
-    body="$default_body"
+    title="$default_title with method '$merge_method'"
+    body=$(git log --pretty=format:"- %s" "$branch" "^$DEFAULT_BASE_BRANCH")
   else
-    # Cas 3 : mode interactif → éditeur avec contenu pré-rempli
+    # 📝 Pré-remplissage dans fichier temporaire
     local tmpfile
     tmpfile=$(mktemp /tmp/git-commit-msg.XXXXXX)
 
@@ -134,22 +139,19 @@ build_commit_message() {
     } > "$tmpfile"
 
     local editor="${EDITOR:-vim}"
-    echo -e "📝 Ouverture de l’éditeur pour le message de commit (${editor})...\n"
+
+    echo "📝 Ouverture de l'éditeur ($editor) pour modifier le message de commit..." >&2
     "$editor" "$tmpfile"
 
     title=$(head -n 1 "$tmpfile")
-    body=$(tail -n +2 "$tmpfile")
-
+    body=$(tail -n +3 "$tmpfile")
     rm -f "$tmpfile"
-
-    [[ -z "$title" ]] && title="$default_title"
-    [[ -z "$body" ]] && body="$default_body"
   fi
 
+  # Sortie finale
   echo "$title"
   echo "---"
   echo "$body"
-
   return 0
 }
 
