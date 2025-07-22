@@ -12,7 +12,7 @@
 create_branch() {
   local type="$1"
   local name="$2"
-  local base_branch="main"
+  local base_branch="$DEFAULT_BASE_BRANCH"
 
   if [[ -z "$type" || -z "$name" ]]; then
     echo -e "${YELLOW}⚠️  Type ou nom de branche manquant.${RESET}"
@@ -89,7 +89,6 @@ get_branch_input_or_current() {
   fi
 }
 
-
 is_valid_branch_type() {
   local type="$1"
   [[ -n "${BRANCH_ICONS[$type]}" ]]
@@ -108,7 +107,6 @@ get_branch_icon() {
   local icon="${BRANCH_ICONS[$type]}"
   [[ -n "$icon" ]] && echo "$icon"
 }
-
 
 # Vérifie si une branche locale existe
 # Usage : local_branch_exists <branch>
