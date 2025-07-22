@@ -6,46 +6,38 @@
 # Si aucun argument n'est passé, demande interactive avec fzf
 start() {
   local input="$1"
-  local branch_type=""
-  local name=""
+  local type name branch full_branch_name
 
-  # 🔹 Si un nom est passé directement sous forme "prefix/nom"
-  if [[ -n "$input" && "$input" == */* ]]; then
-    branch_type="${input%%/*}"
-    name="${input#*/}"
-  fi
+  # 1. Récupère l'input (ou la branche courante si vide)
+  branch=$(get_branch_input_or_current "$input") || return 1
 
-  # 🔸 Vérifie que l’état Git est propre
-  if ! is_branch_clean; then
-    echo -e "${YELLOW}⚠️  Tu dois d’abord nettoyer ton état Git avant de créer une nouvelle branche.${RESET}"
+  # 2. Parse l'input en type et nom
+  if ! parse_branch_input "$branch" type name; then
     return 1
   fi
 
-  # 🔹 Si aucun type ou nom, propose via fzf
-  if [[ -z "$branch_type" || -z "$name" ]]; then
-    if ! command -v fzf >/dev/null; then
-      echo -e "${YELLOW}⚠️  La commande 'fzf' est requise si aucun argument n’est passé.${RESET}"
-      return 1
-    fi
-
-    branch_type=$(printf "%s\n" "${!BRANCH_TYPES[@]}" | fzf --prompt="🌟 Type de branche ? > " --height=10%)
-    [[ -z "$branch_type" ]] && echo -e "${YELLOW}⚠️  Aucun type sélectionné.${RESET}" && return 1
-
-    read -rp "📝 Nom de la branche : " name
-    [[ -z "$name" ]] && echo -e "${YELLOW}⚠️  Nom requis.${RESET}" && return 1
+  # 3. Valide le type de branche
+  if ! is_valid_branch_type "$type"; then
+    echo -e "${RED}❌ Type de branche invalide : $type${RESET}"
+    return 1
   fi
 
-  # 🔸 Nettoyage et validation du nom
+  # 4. Valide le nom de branche
   if ! is_valid_branch_name "$name"; then
-    local original="$name"
-    name=$(normalize_branch_name "$name")
-    echo -e "${YELLOW}⚠️  Nom de branche invalide : '${original}' → corrigé en '${name}'.${RESET}"
+    echo -e "${RED}❌ Nom de branche invalide : $name${RESET}"
+    return 1
   fi
 
-  # ✅ Création
-  create_branch "$branch_type" "$name"
-}
+  # 5. Vérifie si la branche existe déjà
+  full_branch_name="${type}/${name}"
+  if local_branch_exists "$full_branch_name"; then
+    echo -e "${YELLOW}⚠️  La branche ${full_branch_name} existe déjà.${RESET}"
+    return 1
+  fi
 
+  # 6. Crée la branche via la fonction dédiée
+  create_branch "$type" "$name"
+}
 
 finish() {
   local branch_input="" branch_type="" branch_name="" branch="" current=""

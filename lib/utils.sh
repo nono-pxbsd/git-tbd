@@ -13,7 +13,7 @@ get_commit_count_between_branches() {
 squash_commits_to_one() {
    # Valeurs par défaut
   local method="rebase"
-  local base_branch="main"
+  local base_branch="$DEFAULT_BASE_BRANCH"
 
   # Parse arguments nommés
   for arg in "$@"; do
