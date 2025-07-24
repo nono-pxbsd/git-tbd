@@ -5,6 +5,8 @@
 # Si un argument est passé, il est utilisé pour déterminer le type et le nom
 # Si aucun argument n'est passé, demande interactive avec fzf
 start() {
+  log_debug "start() called with arguments: $*"
+
   local input="$1"
   local type name branch full_branch_name
 
@@ -40,6 +42,8 @@ start() {
 }
 
 finish() {
+  log_debug "finish() called with arguments: $*"
+
   local branch_input="" branch_type="" branch_name="" branch="" current=""
   local method="$DEFAULT_MERGE_METHOD"
   local open_pr="$OPEN_PR"
@@ -82,11 +86,9 @@ finish() {
     return 1
   fi
 
-  local output
+  local output commit_title commit_body
   output=$(build_commit_content --branch="$branch" --method="$method" --silent="$silent" --message="$title_input") || return 1
-  local commit_title
   commit_title=$(echo "$output" | head -n 1)
-  local commit_body
   commit_body=$(echo "$output" | tail -n +3)
 
   if [[ "$REQUIRE_PR_ON_FINISH" == true ]] && ! pr_exists "$branch" && [[ "$open_pr" != true ]]; then
@@ -120,6 +122,7 @@ finish() {
 # Si la branche est publiée avec succès, affiche un message de succès
 # Si la branche n'est pas publiée, affiche un message d'erreur
 publish() {
+  log_debug "publish() called with arguments: $*"
   local force=false
   local branch="${1:-$(git symbolic-ref --short HEAD)}"
 
@@ -181,6 +184,8 @@ publish() {
 # Si gh pr view échoue, affiche un message d'erreur
 # Si la PR est créée, affiche un message de succès avec le lien vers la PR
 open_pr() {
+  log_debug "open_pr() called with arguments: $*"
+
   local branch_input="$1"
   local branch_type="" branch_name=""
 
@@ -218,6 +223,8 @@ open_pr() {
 # Si l'utilisateur confirme, valide la PR avec le mode de fusion spécifié (local-squash, squash, merge)
 # Si l'utilisateur refuse, annule la validation
 validate_pr() {
+  log_debug "validate_pr() called with arguments: $*"
+
   local branch=""
   local merge_mode="squash"
   local assume_yes=false

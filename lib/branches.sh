@@ -125,6 +125,17 @@ remote_branch_exists () {
   git ls-remote --heads origin "$branch" | grep -q "$branch"
 }
 
+branch_exists() {
+  local branch="$1"
+  local exists=1
+
+  if local_branch_exists "$branch" || remote_branch_exists "$branch"; then
+    exists=0
+  fi
+
+  return "$exists"
+}
+
 # Supprime une branche distante si elle existe
 # Usage : delete_remote_branch <branch>
 # Exemple : delete_remote_branch feature/my-feature

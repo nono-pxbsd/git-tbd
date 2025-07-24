@@ -37,3 +37,6 @@ OPEN_PR=true
 
 # Exiger une PR pour finaliser une branche
 REQUIRE_PR_ON_FINISH=true
+
+# Mode debug (affiche les commandes exécutées)
+DEBUG_MODE=true
