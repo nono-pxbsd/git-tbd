@@ -122,6 +122,11 @@ build_commit_content() {
     title=$(generate_commit_title --branch="$branch" --method="$method" --silent="$silent")
   fi
 
+  if ! command -v "${EDITOR:-vim}" >/dev/null; then
+    echo -e "${RED}❌ Aucun éditeur défini. Définis \$EDITOR ou installe vim/nano.${RESET}" >&2
+    return 1
+  fi
+
   # Body
   if [[ "$should_edit_body" == "true" ]]; then
     # On ouvre un éditeur pour que l’utilisateur écrive ou corrige le body
