@@ -6,6 +6,9 @@ DEFAULT_BASE_BRANCH="main"
 # Mode de validation par défaut : squash | merge | local-squash
 DEFAULT_MERGE_MODE="local-squash"
 
+# Éditeur de texte par défaut pour les messages de commit
+DEFAULT_EDITOR="vim"
+
 # Icônes par type de branche (utile pour les messages de commit)
 declare -A BRANCH_ICONS
 BRANCH_ICONS=(

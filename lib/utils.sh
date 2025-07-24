@@ -52,34 +52,101 @@ squash_commits_to_one() {
   esac
 }
 
-generate_merge_label() {
-  local branch="$1"
-  local method="$2"
-  local silent="$3"
+generate_commit_title() {
+  local branch="" method="" silent="$SILENT_MODE"
+  for arg in "$@"; do
+    case $arg in
+      --branch=*) branch="${arg#*=}" ;;
+      --method=*) method="${arg#*=}" ;;
+      --silent=*) silent="${arg#*=}" ;;
+    esac
+  done
+
   local type="${branch%%/*}"
   local name="${branch##*/}"
   local icon="${ICONS[$type]:-🔀}"
+  local default_title="$icon $branch: merge into $DEFAULT_BASE_BRANCH (method: $method)"
 
-  local default_message="$icon $branch: merge into $DEFAULT_BASE_BRANCH (method: $method)"
-
-  if [[ "$silent" == true ]]; then
-    echo "$default_message"
+  if [[ "$silent" == "true" ]]; then
+    echo "$default_title"
   else
-    local last_commit_msg
-    last_commit_msg=$(git log -1 --pretty=%B | head -n 1)
+    local last_commit
+    last_commit=$(git log -1 --pretty=%s "$branch")
 
-    echo -e "${YELLOW}⚠️ Entrez un message pour le squash (laisser vide pour utiliser le dernier ou 'auto' pour le message par défaut):${RESET}"
-    echo -e "Dernier commit : $last_commit_msg"
-    read -r custom_message
-
-    if [[ -z "$custom_message" ]]; then
-      echo "$last_commit_msg"
-    elif [[ "$custom_message" == "auto" ]]; then
-      echo "$default_message"
-    else
-      echo "$custom_message"
-    fi
+    echo -e "${YELLOW}💬 Titre du commit (laisser vide = dernier, 'auto' = par défaut) :${RESET}"
+    echo -e "Dernier commit : $last_commit"
+    read -r input
+    [[ -z "$input" ]] && echo "$last_commit" || [[ "$input" == "auto" ]] && echo "$default_title" || echo "$input"
   fi
+}
+
+generate_commit_description() {
+  local branch="" method=""
+
+  for arg in "$@"; do
+    case "$arg" in
+      --branch=*) branch="${arg#*=}" ;;
+      --method=*) method="${arg#*=}" ;;
+    esac
+  done
+
+  git log --pretty=format:"- %s" "$branch" "^$DEFAULT_BASE_BRANCH"
+}
+
+build_commit_content() {
+  local branch="" method="" silent="$SILENT_MODE" title_input=""
+  for arg in "$@"; do
+    case $arg in
+      --branch=*) branch="${arg#*=}" ;;
+      --method=*) method="${arg#*=}" ;;
+      --silent=*) silent="${arg#*=}" ;;
+      --message=*) title_input="${arg#*=}" ;;
+    esac
+  done
+
+  local title="" body=""
+  local commit_count
+  commit_count=$(get_commit_count_between_branches "$DEFAULT_BASE_BRANCH" "$branch")
+
+  local should_edit_body=false
+  if [[ "$silent" != "true" && "$commit_count" -gt 1 ]]; then
+    case "$method" in
+      squash|rebase|local-squash) should_edit_body=true ;;
+    esac
+  fi
+
+  # Titre = message forcé OU titre généré
+  if [[ -n "$title_input" ]]; then
+    title="$title_input"
+  else
+    title=$(generate_commit_title --branch="$branch" --method="$method" --silent="$silent")
+  fi
+
+  # Body
+  if [[ "$should_edit_body" == "true" ]]; then
+    # On ouvre un éditeur pour que l’utilisateur écrive ou corrige le body
+    local tmpfile
+    tmpfile=$(mktemp /tmp/git-commit-msg.XXXXXX)
+
+    {
+      echo "$title"
+      echo ""
+      echo "$(generate_commit_description --branch="$branch" --method="$method")"
+    } > "$tmpfile"
+
+    echo -e "${YELLOW}📝 Ouverture de l’éditeur pour modifier le message de commit.${RESET}"
+    "${EDITOR:-$DEFAULT_EDITOR}" "$tmpfile"
+
+    title=$(head -n 1 "$tmpfile")
+    body=$(tail -n +3 "$tmpfile")
+  elif [[ -z "$title_input" && "$commit_count" -gt 1 ]]; then
+    # Si pas d’édition et pas de titre imposé, on peut générer un body automatiquement
+    body=$(generate_commit_description --branch="$branch" --method="$method")
+  fi
+
+  echo "$title"
+  echo ""
+  [[ -n "$body" ]] && echo "$body"
 }
 
 pr_exists() {
@@ -88,71 +155,6 @@ pr_exists() {
   pr_number=$(gh pr list --head "$branch" --state open --json number --jq '.[0].number' 2>/dev/null)
 
   [[ -n "$pr_number" ]]
-}
-
-build_commit_message() {
-  # Lecture des arguments via getopt-like parsing
-  local branch=""
-  local merge_method=""
-  local silent=""
-  local user_msg=""
-
-  while [[ $# -gt 0 ]]; do
-    case "$1" in
-      --branch=*) branch="${1#*=}" ;;
-      --merge-method=*) merge_method="${1#*=}" ;;
-      --silent=*) silent="${1#*=}" ;;
-      --user-msg=*) user_msg="${1#*=}" ;;
-      *) echo "❌ Option inconnue : $1" >&2; return 1 ;;
-    esac
-    shift
-  done
-
-  # 🪵 DEBUG LOGS
-  echo "[DEBUG] branch         = '$branch'" >&2
-  echo "[DEBUG] merge_method   = '$merge_method'" >&2
-  echo "[DEBUG] silent         = '$silent'" >&2
-  echo "[DEBUG] user_msg       = '$user_msg'" >&2
-
-  # Valeurs par défaut
-  local default_title="Merge branch $branch into $DEFAULT_BASE_BRANCH"
-  local default_body=$(git log --pretty=format:"- %s" "$branch" "^$DEFAULT_BASE_BRANCH")
-
-  local title=""
-  local body=""
-
-  if [[ -n "$user_msg" ]]; then
-    title="${user_msg%%$'\n'*}"
-    body="${user_msg#*$'\n'}"
-  elif [[ "$silent" == true ]]; then
-    title="$default_title with method '$merge_method'"
-    body=$(git log --pretty=format:"- %s" "$branch" "^$DEFAULT_BASE_BRANCH")
-  else
-    # 📝 Pré-remplissage dans fichier temporaire
-    local tmpfile
-    tmpfile=$(mktemp /tmp/git-commit-msg.XXXXXX)
-
-    {
-      echo "$default_title"
-      echo ""
-      echo "$default_body"
-    } > "$tmpfile"
-
-    local editor="${EDITOR:-vim}"
-
-    echo "📝 Ouverture de l'éditeur ($editor) pour modifier le message de commit..." >&2
-    "$editor" "$tmpfile"
-
-    title=$(head -n 1 "$tmpfile")
-    body=$(tail -n +3 "$tmpfile")
-    rm -f "$tmpfile"
-  fi
-
-  # Sortie finale
-  echo "$title"
-  echo "---"
-  echo "$body"
-  return 0
 }
 
 prepare_merge_mode() {
