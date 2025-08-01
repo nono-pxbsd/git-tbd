@@ -1,16 +1,40 @@
 #!/bin/bash
 
-# ------------------------
-# Configuration Git-TBD
-# ------------------------
+get_commit_count_between_branches_raw() {
+  git rev-list --count "$1..$2"
+}
 
 get_commit_count_between_branches() {
-  local from_branch="$1"
-  local to_branch="$2"
-  git rev-list --count "$from_branch..$to_branch"
+  local from="$1"
+  local to="$2"
+
+  if ! branch_exists "$from"; then
+    echo "❌ La branche '$from' n'existe pas localement ni à distance." >&2
+    return 1
+  fi
+
+  if ! branch_exists "$to"; then
+    echo "❌ La branche '$to' n'existe pas localement ni à distance." >&2
+    return 1
+  fi
+
+  local count
+  count=$(get_commit_count_between_branches_raw "$from" "$to")
+  echo "$count"
+}
+
+print_commit_count_between_branches() {
+  local from="$1"
+  local to="$2"
+  local count
+
+  count=$(get_commit_count_between_branches "$from" "$to") || return 1
+  echo -e "${YELLOW}📊 Nombre de commits entre $from et $to : $count${RESET}"
 }
 
 squash_commits_to_one() {
+  log_debug "squash_commits_to_one() called with arguments: $*"
+
    # Valeurs par défaut
   local method="rebase"
   local base_branch="$DEFAULT_BASE_BRANCH"
@@ -52,113 +76,133 @@ squash_commits_to_one() {
   esac
 }
 
-generate_merge_label() {
-  local branch="$1"
-  local method="$2"
-  local silent="$3"
+generate_commit_title() {
+  log_debug "generate_commit_title() called with arguments: $*"
+
+  local branch="" method="" silent="$SILENT_MODE"
+  for arg in "$@"; do
+    case $arg in
+      --branch=*) branch="${arg#*=}" ;;
+      --method=*) method="${arg#*=}" ;;
+      --silent=*) silent="${arg#*=}" ;;
+    esac
+  done
+
   local type="${branch%%/*}"
   local name="${branch##*/}"
   local icon="${ICONS[$type]:-🔀}"
-
-  local default_message="$icon $branch: merge into $DEFAULT_BASE_BRANCH (method: $method)"
+  local default_title="$icon $branch: merge into $DEFAULT_BASE_BRANCH (method: $method)"
 
   if [[ "$silent" == true ]]; then
-    echo "$default_message"
+    echo "$default_title"
   else
-    local last_commit_msg
-    last_commit_msg=$(git log -1 --pretty=%B | head -n 1)
+    local last_commit
+    last_commit=$(git log -1 --pretty=%s "$branch")
 
-    echo -e "${YELLOW}⚠️ Entrez un message pour le squash (laisser vide pour utiliser le dernier ou 'auto' pour le message par défaut):${RESET}"
-    echo -e "Dernier commit : $last_commit_msg"
-    read -r custom_message
-
-    if [[ -z "$custom_message" ]]; then
-      echo "$last_commit_msg"
-    elif [[ "$custom_message" == "auto" ]]; then
-      echo "$default_message"
-    else
-      echo "$custom_message"
-    fi
+    
+    echo -e "${YELLOW}💬 Titre du commit (laisser vide = dernier, 'auto' = par défaut) :${RESET}"
+    echo -e "Dernier commit : $last_commit"
+    input="test"
+    [[ -z "$input" ]] && echo "$last_commit" || [[ "$input" == "auto" ]] && echo "$default_title" || echo "$input"
   fi
+}
+
+generate_commit_description() {
+  log_debug "generate_commit_description() called with arguments: $*"
+
+  local branch="" method=""
+
+  for arg in "$@"; do
+    case "$arg" in
+      --branch=*) branch="${arg#*=}" ;;
+      --method=*) method="${arg#*=}" ;;
+    esac
+  done
+
+  git log --pretty=format:"- %s" "$branch" "^$DEFAULT_BASE_BRANCH"
+}
+
+build_commit_content() {
+  log_debug "build_commit_content() called with arguments: $*"
+
+  local branch="" method="" silent="$SILENT_MODE" title_input=""
+  for arg in "$@"; do
+    case $arg in
+      --branch=*) branch="${arg#*=}" ;;
+      --method=*) method="${arg#*=}" ;;
+      --silent=*) silent="${arg#*=}" ;;
+      --message=*) title_input="${arg#*=}" ;;
+    esac
+  done
+
+  local title="" body=""
+  local commit_count
+  commit_count=$(get_commit_count_between_branches_raw "$DEFAULT_BASE_BRANCH" "$branch")
+
+  local should_edit_body=false
+  if [[ "$silent" != true && "$commit_count" -gt 1 ]]; then
+    case "$method" in
+      squash|rebase|local-squash) should_edit_body=true ;;
+    esac
+  fi
+
+  # Titre = message forcé OU titre généré
+  if [[ -n "$title_input" ]]; then
+    title="$title_input"
+  else
+    title=$(generate_commit_title --branch="$branch" --method="$method" --silent="$silent")
+    log_debug "${GREEN}💬 Titre du commit auto : $title${RESET}"
+  fi
+
+  if ! command -v "${EDITOR:-$DEFAULT_EDITOR}" >/dev/null; then
+    echo -e "${RED}❌ Aucun éditeur défini. Définis \$EDITOR ou installe vim/nano.${RESET}" >&2
+    return 1
+  fi
+
+  # Body
+  if [[ "$should_edit_body" == true ]]; then
+    # On ouvre un éditeur pour que l’utilisateur écrive ou corrige le body
+    local tmpfile
+    tmpfile=$(mktemp /tmp/git-commit-msg.XXXXXX)
+
+    {
+      echo "$title"
+      echo ""
+      echo "$(generate_commit_description --branch="$branch" --method="$method")"
+    } > "$tmpfile"
+
+    log_debug "${YELLOW}📝 Ouverture de l’éditeur pour modifier le message de commit.${RESET}"
+    "${EDITOR:-$DEFAULT_EDITOR}" "$tmpfile"
+
+    title=$(head -n 1 "$tmpfile")
+    body=$(tail -n +3 "$tmpfile")
+  elif [[ -z "$title_input" && "$commit_count" -gt 1 ]]; then
+    # Si pas d’édition et pas de titre imposé, on peut générer un body automatiquement
+    body=$(generate_commit_description --branch="$branch" --method="$method")
+  fi
+
+  echo "$title"
+  echo ""
+  [[ -n "$body" ]] && echo "$body"
 }
 
 pr_exists() {
   local branch="${1:-$(git symbolic-ref --short HEAD)}"
+  log_debug "pr_exists() called for branch: $branch"
+
   local pr_number
   pr_number=$(gh pr list --head "$branch" --state open --json number --jq '.[0].number' 2>/dev/null)
 
   [[ -n "$pr_number" ]]
 }
 
-build_commit_message() {
-  # Lecture des arguments via getopt-like parsing
-  local branch=""
-  local merge_method=""
-  local silent=""
-  local user_msg=""
-
-  while [[ $# -gt 0 ]]; do
-    case "$1" in
-      --branch=*) branch="${1#*=}" ;;
-      --merge-method=*) merge_method="${1#*=}" ;;
-      --silent=*) silent="${1#*=}" ;;
-      --user-msg=*) user_msg="${1#*=}" ;;
-      *) echo "❌ Option inconnue : $1" >&2; return 1 ;;
-    esac
-    shift
-  done
-
-  # 🪵 DEBUG LOGS
-  echo "[DEBUG] branch         = '$branch'" >&2
-  echo "[DEBUG] merge_method   = '$merge_method'" >&2
-  echo "[DEBUG] silent         = '$silent'" >&2
-  echo "[DEBUG] user_msg       = '$user_msg'" >&2
-
-  # Valeurs par défaut
-  local default_title="Merge branch $branch into $DEFAULT_BASE_BRANCH"
-  local default_body=$(git log --pretty=format:"- %s" "$branch" "^$DEFAULT_BASE_BRANCH")
-
-  local title=""
-  local body=""
-
-  if [[ -n "$user_msg" ]]; then
-    title="${user_msg%%$'\n'*}"
-    body="${user_msg#*$'\n'}"
-  elif [[ "$silent" == true ]]; then
-    title="$default_title with method '$merge_method'"
-    body=$(git log --pretty=format:"- %s" "$branch" "^$DEFAULT_BASE_BRANCH")
-  else
-    # 📝 Pré-remplissage dans fichier temporaire
-    local tmpfile
-    tmpfile=$(mktemp /tmp/git-commit-msg.XXXXXX)
-
-    {
-      echo "$default_title"
-      echo ""
-      echo "$default_body"
-    } > "$tmpfile"
-
-    local editor="${EDITOR:-vim}"
-
-    echo "📝 Ouverture de l'éditeur ($editor) pour modifier le message de commit..." >&2
-    "$editor" "$tmpfile"
-
-    title=$(head -n 1 "$tmpfile")
-    body=$(tail -n +3 "$tmpfile")
-    rm -f "$tmpfile"
-  fi
-
-  # Sortie finale
-  echo "$title"
-  echo "---"
-  echo "$body"
-  return 0
-}
-
 prepare_merge_mode() {
   local branch="${1:-$(git symbolic-ref --short HEAD)}"
-  local commit_count=$(get_commit_count_between_branches "origin/$DEFAULT_BASE_BRANCH" "$current_branch")
   local merge_mode="$DEFAULT_MERGE_MODE"
+  log_debug "prepare_merge_mode() called for branch: $branch with merge_mode: $merge_mode"
+
+  local commit_count=$(get_commit_count_between_branches "origin/$DEFAULT_BASE_BRANCH" "$current_branch")
+  log_debug "Nombre de commits entre origin/$DEFAULT_BASE_BRANCH et $branch : $commit_count"
 
   if [[ "$merge_mode" == "squash" && "$commit_count" -gt 1 ]]; then
     echo -e "${YELLOW}⚠️  Plusieurs commits détectés (${commit_count})."
@@ -193,6 +237,8 @@ finalize_branch_merge() {
   local branch=""
   local merge_mode=""
   local via_pr="false"
+
+  log_debug "finalize_branch_merge() called with arguments: $*"
 
   for arg in "$@"; do
     case "$arg" in
@@ -239,5 +285,11 @@ finalize_branch_merge() {
     fi
     delete_remote_branch "$branch"
     echo -e "${GREEN}✅ Branche fusionnée et supprimée.${RESET}"
+  fi
+}
+
+log_debug() {
+  if [[ "$DEBUG_MODE" == true ]]; then
+    echo -e ">>> $*" >&2
   fi
 }

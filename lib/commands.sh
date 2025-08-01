@@ -5,6 +5,8 @@
 # Si un argument est passé, il est utilisé pour déterminer le type et le nom
 # Si aucun argument n'est passé, demande interactive avec fzf
 start() {
+  log_debug "start() called with arguments: $*"
+
   local input="$1"
   local type name branch full_branch_name
 
@@ -40,79 +42,71 @@ start() {
 }
 
 finish() {
+  log_debug "finish() called with arguments: $*"
+
   local branch_input="" branch_type="" branch_name="" branch="" current=""
   local method="$DEFAULT_MERGE_METHOD"
   local open_pr="$OPEN_PR"
   local silent="$SILENT_MODE"
-  local commit_msg=""
+  local title_input=""
 
   current=$(git rev-parse --abbrev-ref HEAD)
 
-  # -- Extraction des arguments
+  # -- Arguments
   while [[ $# -gt 0 ]]; do
     case "$1" in
       --pr|-p) open_pr=true ;;
       --silent|-s) silent=true ;;
       --method=*) method="${1#*=}" ;;
-      --message=*) commit_msg="${1#*=}" ;;
-      *)  # Premier argument positionnel = branche
-          if [[ -z "$branch_input" ]]; then
-            branch_input="$1"
-          else
-            echo -e "${YELLOW}⚠️  Trop d'arguments. Usage : finish [type/name] [--pr] [--silent] [--method=...] [--message=...]${RESET}"
-            return 1
-          fi
-          ;;
+      --message=*) title_input="${1#*=}" ;;
+      *)  # positionnel = branche
+        if [[ -z "$branch_input" ]]; then
+          branch_input="$1"
+        else
+          echo -e "${YELLOW}⚠️ Trop d'arguments. Usage : finish [type/name] [--pr] [--silent] [--method=...] [--message=...]${RESET}"
+          return 1
+        fi
+        ;;
     esac
     shift
   done
 
-  # Récupère le nom et le type de branche depuis l'argument ou la branche courante
   branch_input="$(get_branch_input_or_current "$branch_input")"
-  if ! parse_branch_input "$branch_input" branch_type branch_name; then
-    return 1
-  fi
+  if ! parse_branch_input "$branch_input" branch_type branch_name; then return 1; fi
+  branch="${branch_type}/${branch_name}"
 
-  local branch="${branch_type}/${branch_name}"
-
-  echo -e "${BLUE}📍Finalisation de la branche ${branch}.${RESET}"
-  echo -e "Rappel : la branche par défaut est ${DEFAULT_BASE_BRANCH} et la branche courante est ${current} et la branche cible est ${branch}.${RESET}"
+  echo -e "${BLUE}📍 Finalisation de la branche ${branch}.${RESET}"
 
   if is_current_branch "$branch" && ! is_branch_clean "$branch"; then
-    echo -e "${YELLOW}⚠️  La branche courante n'est pas propre : ${branch}. Tu dois d'abord la nettoyer.${RESET}"
+    echo -e "${YELLOW}⚠️ Branche courante sale : ${branch}.${RESET}"
     return 1
   fi
-
   if ! is_current_branch "$branch" && ! is_branch_clean "$branch"; then
-    echo -e "${YELLOW}⚠️  La branche ${branch} n'est pas propre. Tu dois d'abord de positionner dessus et la nettoyer.${RESET}"
+    echo -e "${YELLOW}⚠️ Branche cible sale. Positionne-toi dessus et nettoie-la.${RESET}"
     return 1
   fi
 
-  # Génère le titre et le body à partir du message ou par défaut
-  build_commit_message --branch="$branch" --merge-method="${method:-}" --silent="${silent:-}" --user-msg="${msg:-}"
+  local output commit_title commit_body
+  output=$(build_commit_content --branch="$branch" --method="$method" --silent="$silent" --message="$title_input") || return 1
+  commit_title=$(echo "$output" | head -n 1)
+  commit_body=$(echo "$output" | tail -n +3)
+
+  if [[ "$REQUIRE_PR_ON_FINISH" == true ]] && ! pr_exists "$branch" && [[ "$open_pr" != true ]]; then
+    echo -e "${YELLOW}❌ PR requise pour finaliser cette branche.${RESET}"
+    return 1
+  fi
 
   if pr_exists "$branch"; then
-    # PR déjà ouverte → on valide
     validate_pr "$branch" ${silent:+--assume-yes} || return 1
-
   elif [[ "$open_pr" == true ]]; then
-    # PR demandée → on ouvre si pas déjà présente, puis on valide
     open_pr "$branch" || return 1
     validate_pr "$branch" ${silent:+--assume-yes} || return 1
-
-  elif [[ "$REQUIRE_PR_ON_FINISH" == true ]]; then
-  # Politique globale : PR obligatoire
-    echo -e "${YELLOW}⚠️  Aucune pull request détectée pour ${branch}.${RESET}"
-    echo -e "${YELLOW}❌ La configuration actuelle impose une PR pour finaliser une branche.${RESET}"
-  return 1
-
   else
-    # Pas de PR, pas d’exigence → on merge directement
-    $silent || echo -e "${GREEN}✅ Aucun PR détecté ou requis. Finalisation directe.${RESET}"
-    merge_mode=$(prepare_merge_mode)
-    [[ $? -ne 0 ]] && return 1
+    $silent || echo -e "${GREEN}✅ Finalisation locale sans PR.${RESET}"
+    merge_mode=$(prepare_merge_mode) || return 1
     finalize_branch_merge --branch="$branch" --merge-mode="$merge_mode" --via-pr=false
   fi
+
 }
 
 # Commande pour publier une branche
@@ -128,6 +122,7 @@ finish() {
 # Si la branche est publiée avec succès, affiche un message de succès
 # Si la branche n'est pas publiée, affiche un message d'erreur
 publish() {
+  log_debug "publish() called with arguments: $*"
   local force=false
   local branch="${1:-$(git symbolic-ref --short HEAD)}"
 
@@ -189,6 +184,8 @@ publish() {
 # Si gh pr view échoue, affiche un message d'erreur
 # Si la PR est créée, affiche un message de succès avec le lien vers la PR
 open_pr() {
+  log_debug "open_pr() called with arguments: $*"
+
   local branch_input="$1"
   local branch_type="" branch_name=""
 
@@ -226,6 +223,8 @@ open_pr() {
 # Si l'utilisateur confirme, valide la PR avec le mode de fusion spécifié (local-squash, squash, merge)
 # Si l'utilisateur refuse, annule la validation
 validate_pr() {
+  log_debug "validate_pr() called with arguments: $*"
+
   local branch=""
   local merge_mode="squash"
   local assume_yes=false
