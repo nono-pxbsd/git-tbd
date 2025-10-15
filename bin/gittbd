@@ -1,0 +1,97 @@
+#!/bin/bash
+# gittbd : CLI pour workflow Trunk-Based Development 🚀
+# Version : 2.0.0
+# Auteur : nono.pxbsd
+# Licence : MIT
+
+set -euo pipefail
+
+# Couleurs pour l'aide
+BOLD="\e[1m"
+GREEN="\e[32m"
+YELLOW="\e[33m"
+CYAN="\e[36m"
+RESET="\e[0m"
+
+# Détection du répertoire d'installation
+SCRIPT_PATH="$(readlink -f "$0")"
+SCRIPT_DIR="$(dirname "$SCRIPT_PATH")"
+
+# Chargement des bibliothèques
+if [[ -f "${SCRIPT_DIR}/../lib/config.sh" ]]; then
+  LIB_DIR="${SCRIPT_DIR}/../lib"
+else
+  echo "❌ Impossible de trouver les bibliothèques. Réinstallez gittbd."
+  exit 1
+fi
+
+source "${LIB_DIR}/config.sh"
+source "${LIB_DIR}/utils.sh"
+source "${LIB_DIR}/branches.sh"
+source "${LIB_DIR}/commands.sh"
+
+# Fonction d'aide
+print_help() {
+  echo -e "${BOLD}gittbd${RESET} - CLI pour workflow Trunk-Based Development\n"
+  echo "Usage :"
+  echo "  ${CYAN}gittbd start [type/name]${RESET}      → Crée une nouvelle branche (alias: s)"
+  echo "  ${CYAN}gittbd finish [options]${RESET}       → Merge dans main + suppression (alias: f)"
+  echo "  ${CYAN}gittbd publish [branch]${RESET}       → Publie la branche sur origin (alias: p)"
+  echo "  ${CYAN}gittbd pr [branch]${RESET}            → Ouvre une Pull Request"
+  echo "  ${CYAN}gittbd mr [branch]${RESET}            → Alias de 'pr' (pour GitLab)"
+  echo "  ${CYAN}gittbd validate [branch]${RESET}      → Valide une PR/MR (alias: v, merge)"
+  echo "  ${CYAN}gittbd sync [branch]${RESET}          → Synchronise avec origin"
+  echo "  ${CYAN}gittbd bump <type>${RESET}            → Crée un tag de version (major/minor/patch)"
+  echo "  ${CYAN}gittbd help${RESET}                   → Affiche cette aide"
+  echo ""
+  echo "Options globales :"
+  echo "  ${YELLOW}SILENT_MODE=true${RESET}           → Mode silencieux (minimal)"
+  echo "  ${YELLOW}DEBUG_MODE=true${RESET}            → Mode debug (verbose)"
+  echo "  ${YELLOW}GIT_PLATFORM=gitlab${RESET}        → Utilise GitLab au lieu de GitHub"
+  echo ""
+  echo "Exemples :"
+  echo "  gittbd start feature/login-form"
+  echo "  gittbd s                          # Mode interactif"
+  echo "  gittbd f --pr                     # Finish avec PR"
+  echo "  gittbd bump patch"
+  echo "  SILENT_MODE=true gittbd validate --assume-yes"
+  echo ""
+  echo "Configuration :"
+  echo "  Fichier : ${LIB_DIR}/config.sh"
+  echo "  Variables : DEFAULT_BASE_BRANCH, DEFAULT_MERGE_MODE, etc."
+}
+
+# Dispatcher avec raccourcis et alias
+case "${1:-help}" in
+  start|s)
+    shift
+    start "$@"
+    ;;
+  finish|f)
+    shift
+    finish "$@"
+    ;;
+  publish|p)
+    shift
+    publish "$@"
+    ;;
+  pr|mr)
+    shift
+    open_pr "$@"
+    ;;
+  validate|v|merge)
+    shift
+    validate_pr "$@"
+    ;;
+  sync)
+    shift
+    sync_branch_to_remote "$@"
+    ;;
+  bump|b)
+    shift
+    bump "$@"
+    ;;
+  help|--help|-h|*)
+    print_help
+    ;;
+esac
