@@ -12,7 +12,7 @@ log_debug() {
 
 log_info() {
   [[ "$SILENT_MODE" == true ]] && return
-  echo -e "$*"
+  echo -e "$*" >&2
 }
 
 log_warn() {
@@ -26,7 +26,30 @@ log_error() {
 
 log_success() {
   [[ "$SILENT_MODE" == true ]] && return
-  echo -e "${GREEN}✅ $*${RESET}"
+  echo -e "${GREEN}✅ $*${RESET}" >&2
+}
+
+# Affiche un message vers stderr (pour ne pas polluer stdout)
+print_message() {
+  echo -e "$*" >&2
+}
+
+# ====================================
+# Terminologie plateforme (PR vs MR)
+# ====================================
+
+get_platform_term() {
+  case "$GIT_PLATFORM" in
+    gitlab) echo "MR" ;;
+    *) echo "PR" ;;
+  esac
+}
+
+get_platform_term_long() {
+  case "$GIT_PLATFORM" in
+    gitlab) echo "Merge Request" ;;
+    *) echo "Pull Request" ;;
+  esac
 }
 
 # ====================================
@@ -205,11 +228,11 @@ generate_commit_title() {
     local last_commit
     last_commit=$(git log -1 --pretty=%s "$branch" 2>/dev/null)
 
-    echo ""
+    print_message ""
     log_info "💬 ${BOLD}Titre du commit${RESET}"
-    echo "  • Dernier commit : $last_commit"
-    echo "  • Par défaut     : $default_title"
-    echo ""
+    print_message "  • Dernier commit : $last_commit"
+    print_message "  • Par défaut     : $default_title"
+    print_message ""
     read -r -p "Titre (vide = dernier commit, 'auto' = défaut) : " input < /dev/tty
     
     [[ -z "$input" ]] && echo "$last_commit" && return
@@ -326,7 +349,7 @@ prepare_merge_mode() {
     log_info "💡 Nous recommandons le ${BOLD}local-squash${RESET} ou un ${BOLD}merge${RESET} classique."
 
     if [[ "$SILENT_MODE" != true ]]; then
-      echo ""
+      print_message ""
       read -r -p "🔧 Poursuivre avec un squash GitHub ? [y/N] " confirm < /dev/tty
       
       if [[ ! "$confirm" =~ ^[Yy]$ ]]; then
@@ -339,12 +362,12 @@ prepare_merge_mode() {
   if [[ "$SILENT_MODE" == true ]]; then
     echo "$merge_mode"
   else
-    echo ""
+    print_message ""
     log_info "📦 ${BOLD}Méthode de merge disponibles${RESET}"
-    echo "  1. local-squash (recommandé) : Squash local puis merge"
-    echo "  2. merge                      : Merge classique (conserve l'historique)"
-    echo "  3. squash                     : Squash via GitHub/GitLab"
-    echo ""
+    print_message "  1. local-squash (recommandé) : Squash local puis merge"
+    print_message "  2. merge                      : Merge classique (conserve l'historique)"
+    print_message "  3. squash                     : Squash via GitHub/GitLab"
+    print_message ""
     read -r -p "Méthode (vide = local-squash) : " input_mode < /dev/tty
     
     case "$input_mode" in
@@ -379,6 +402,8 @@ finalize_branch_merge() {
     return 1
   fi
 
+  log_debug "finalize_branch_merge: branch=$branch, merge_mode=$merge_mode, via_pr=$via_pr"
+
   # === PHASE 1 : Squash local si demandé ===
   if [[ "$merge_mode" == "local-squash" ]]; then
     log_info "🧹 Squash local en cours..."
@@ -392,9 +417,11 @@ finalize_branch_merge() {
     merge_mode="merge"
   fi
 
+  log_debug "merge_mode après traitement local-squash: '$merge_mode'"
+
   # === PHASE 2 : Merge final ===
   if [[ "$via_pr" == true ]]; then
-    log_info "📄 Validation via PR avec méthode : $merge_mode"
+    log_info "🔄 Validation via PR avec méthode : $merge_mode"
     git_platform_cmd pr-merge "$branch" --"$merge_mode" --delete-branch || return 1
     log_success "PR validée et branche distante supprimée"
   else

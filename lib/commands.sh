@@ -40,9 +40,9 @@ select_branch_type() {
   else
     log_debug "fzf non disponible, utilisation du menu classique"
     
-    echo ""
+    print_message ""
     log_info "🎯 ${BOLD}Sélection du type de branche${RESET}"
-    echo ""
+    print_message ""
     
     local -a types_sorted
     IFS=$'\n' types_sorted=($(printf "%s\n" "${!BRANCH_ICONS[@]}" | sort))
@@ -50,11 +50,11 @@ select_branch_type() {
     
     local i=1
     for type in "${types_sorted[@]}"; do
-      echo "  $i. ${BRANCH_ICONS[$type]} $type"
+      print_message "  $i. ${BRANCH_ICONS[$type]} $type"
       ((i++))
     done
     
-    echo ""
+    print_message ""
     read -r -p "Choix (1-${#types_sorted[@]}) : " choice < /dev/tty
     
     if [[ ! "$choice" =~ ^[0-9]+$ ]] || [[ "$choice" -lt 1 ]] || [[ "$choice" -gt "${#types_sorted[@]}" ]]; then
@@ -86,7 +86,7 @@ start() {
     type=$(select_branch_type) || return 1
     
     # Demande du nom
-    echo ""
+    print_message ""
     read -r -p "📝 Nom de la branche : " name < /dev/tty
     
     if [[ -z "$name" ]]; then
@@ -138,7 +138,7 @@ start() {
   # === Affichage avec emoji ===
   local icon
   icon=$(get_branch_icon "$type")
-  log_info ""
+  print_message ""
   log_success "Création de ${icon} ${CYAN}${full_branch_name}${RESET}"
   
   create_branch "$type" "$name"
@@ -196,10 +196,19 @@ finish() {
     return 1
   fi
 
-  local output commit_title commit_body
-  output=$(build_commit_content --branch="$branch" --method="$method" --silent="$silent" --message="$title_input") || return 1
-  commit_title=$(echo "$output" | head -n 1)
-  commit_body=$(echo "$output" | tail -n +3)
+  # Calculer le nombre de commits
+  local commit_count
+  commit_count=$(get_commit_count_between_branches "$DEFAULT_BASE_BRANCH" "$branch")
+
+  # Générer le titre (avec prompt si besoin)
+  local commit_title
+  commit_title=$(generate_commit_title --branch="$branch" --method="$method" --silent="$silent")
+
+  # Générer le body (sans prompt)
+  local commit_body
+  if [[ "$commit_count" -gt 1 ]]; then
+    commit_body=$(generate_commit_description --branch="$branch" --method="$method")
+  fi
 
   local term=$(get_platform_term)
 
@@ -209,8 +218,9 @@ finish() {
     return 1
   fi
 
+  # ✅ MODIFICATION : Ajout de --force-sync quand PR existe
   if pr_exists "$branch"; then
-    validate_pr "$branch" ${silent:+--assume-yes} || return 1
+    validate_pr "$branch" ${silent:+--assume-yes} --force-sync || return 1
   elif [[ "$open_pr" == true ]]; then
     open_pr "$branch" || return 1
     validate_pr "$branch" ${silent:+--assume-yes} || return 1
@@ -316,7 +326,7 @@ open_pr() {
   esac
 
   log_success "$term créée depuis ${CYAN}$branch${RESET} vers ${CYAN}${DEFAULT_BASE_BRANCH}${RESET}"
-  [[ -n "$url" ]] && echo -e "🔗 Lien : ${BOLD}${url}${RESET}"
+  [[ -n "$url" ]] && print_message "🔗 Lien : ${BOLD}${url}${RESET}"
 }
 
 # ====================================
@@ -354,7 +364,7 @@ validate_pr() {
   local term=$(get_platform_term)
   local term_long=$(get_platform_term_long)
 
-  log_info "🔍 Validation de la $term sur branche : ${CYAN}$branch${RESET}"
+  log_info "📝 Validation de la $term sur branche : ${CYAN}$branch${RESET}"
 
   # === PHASE 1 : Vérifications préalables ===
   if ! local_branch_exists "$branch"; then
@@ -376,7 +386,7 @@ validate_pr() {
   }
 
   # === PHASE 3 : Vérification de la PR/MR ===
-  log_info "📄 Vérification de l'existence d'une $term..."
+  log_info "🔍 Vérification de l'existence d'une $term..."
   
   local pr_number
   pr_number=$(git_platform_cmd pr-exists "$branch")
@@ -406,15 +416,15 @@ validate_pr() {
   fi
 
   # === PHASE 5 : Affichage du résumé (APRÈS toutes les I/O) ===
-  echo ""
+  print_message ""
   log_info "📋 ${BOLD}Résumé de la $term${RESET}"
-  echo ""
+  print_message ""
   
   git_platform_cmd pr-view "$branch" 2>/dev/null || {
     log_warn "Impossible d'afficher le détail de la $term"
   }
   
-  echo ""
+  print_message ""
 
   # === PHASE 6 : Confirmation utilisateur ===
   local confirm="n"
@@ -436,6 +446,8 @@ validate_pr() {
   
   local final_merge_mode
   final_merge_mode=$(prepare_merge_mode "$branch") || return 1
+
+  log_debug "final_merge_mode reçu de prepare_merge_mode: '$final_merge_mode'"
 
   # === PHASE 8 : Exécution finale ===
   finalize_branch_merge \
@@ -538,14 +550,14 @@ bump() {
   
   if [[ ! "$bump_type" =~ ^(major|minor|patch)$ ]]; then
     log_error "Type de bump requis : major, minor ou patch"
-    log_info ""
+    print_message ""
     log_info "Usage : ${BOLD}gittbd bump <type>${RESET}"
-    log_info ""
+    print_message ""
     log_info "Types :"
     log_info "  ${CYAN}major${RESET} : Changement cassant (1.0.0 → 2.0.0)"
     log_info "  ${CYAN}minor${RESET} : Nouvelle fonctionnalité (1.0.0 → 1.1.0)"
     log_info "  ${CYAN}patch${RESET} : Correction de bug (1.0.0 → 1.0.1)"
-    log_info ""
+    print_message ""
     log_info "Options :"
     log_info "  -y, --yes    : Pas de confirmation"
     log_info "  --no-push    : Ne pas pusher le tag"
@@ -581,20 +593,20 @@ bump() {
   new_version=$(bump_version "$current_version" "$bump_type") || return 1
   
   log_info "📦 Nouvelle version : ${BOLD}${GREEN}v${new_version}${RESET}"
-  echo ""
+  print_message ""
   
   log_info "📝 ${BOLD}Changements depuis v${current_version}${RESET}"
-  echo ""
+  print_message ""
   
   local changelog
   changelog=$(generate_changelog "$current_version")
   
   if [[ -z "$changelog" ]]; then
     log_warn "Aucun changement détecté depuis v${current_version}"
-    echo ""
+    print_message ""
   else
-    echo "$changelog"
-    echo ""
+    echo "$changelog" >&2
+    print_message ""
   fi
   
   if [[ "$auto_confirm" != true ]]; then
@@ -635,19 +647,19 @@ ${changelog}"
         repo_path=$(echo "$remote_url" | sed -E 's/.*github\.com[:/](.+)(\.git)?$/\1/')
         repo_path="${repo_path%.git}"
         
-        echo ""
+        print_message ""
         log_info "🔗 ${BOLD}Liens utiles${RESET}"
-        echo "   Release : https://github.com/${repo_path}/releases/tag/v${new_version}"
-        echo "   Compare : https://github.com/${repo_path}/compare/v${current_version}...v${new_version}"
+        print_message "   Release : https://github.com/${repo_path}/releases/tag/v${new_version}"
+        print_message "   Compare : https://github.com/${repo_path}/compare/v${current_version}...v${new_version}"
       elif [[ "$remote_url" =~ gitlab\.com ]]; then
         local repo_path
         repo_path=$(echo "$remote_url" | sed -E 's/.*gitlab\.com[:/](.+)(\.git)?$/\1/')
         repo_path="${repo_path%.git}"
         
-        echo ""
+        print_message ""
         log_info "🔗 ${BOLD}Liens utiles${RESET}"
-        echo "   Tags    : https://gitlab.com/${repo_path}/-/tags/v${new_version}"
-        echo "   Compare : https://gitlab.com/${repo_path}/-/compare/v${current_version}...v${new_version}"
+        print_message "   Tags    : https://gitlab.com/${repo_path}/-/tags/v${new_version}"
+        print_message "   Compare : https://gitlab.com/${repo_path}/-/compare/v${current_version}...v${new_version}"
       fi
     else
       log_error "Échec du push du tag"
@@ -661,6 +673,6 @@ ${changelog}"
     log_info "   git push origin v${new_version}"
   fi
   
-  echo ""
+  print_message ""
   log_success "🎉 Version ${BOLD}v${new_version}${RESET} publiée avec succès !"
 }
