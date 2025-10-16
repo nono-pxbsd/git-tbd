@@ -406,7 +406,14 @@ validate_pr() {
   if [[ "$status" != "synced" ]]; then
     log_warn "Branche '$branch' non synchronisée (statut: $status)"
     
-    if [[ "$force_sync" == true ]]; then
+    # Si la branche est en avance (ahead), c'est probablement après un squash local
+    # Il faut forcer le push au lieu de rebase
+    if [[ "$status" == "ahead" ]]; then
+      log_info "📤 La branche est en avance (probablement après squash local)"
+      log_info "🔧 Force push en cours..."
+      git_safe push origin "$branch" --force-with-lease || return 1
+      log_success "Branche synchronisée avec force push"
+    elif [[ "$force_sync" == true ]]; then
       log_info "🔧 Synchronisation forcée en cours..."
       sync_branch_to_remote --force "$branch" || return 1
     else
