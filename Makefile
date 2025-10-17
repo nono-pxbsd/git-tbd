@@ -20,9 +20,11 @@ check-deps: check-system
 	@command -v bash >/dev/null 2>&1 || command -v zsh >/dev/null 2>&1 || \
 		{ echo "❌ bash ou zsh est requis. Installez-en un via 'sudo apt install bash'."; exit 1; }
 	@if ! command -v fzf >/dev/null 2>&1; then \
-		echo "⚠️  fzf est recommandé pour une meilleure expérience interactive."; \
-		read -p "Voulez-vous installer fzf ? [O/n] " choix; \
-		if [ "$choix" = "O" ] || [ "$choix" = "o" ] || [ -z "$choix" ]; then \
+		echo "⚠️  fzf est FORTEMENT recommandé pour une expérience optimale."; \
+		echo "   Sans fzf, l'interface sera fonctionnelle mais moins pratique."; \
+		echo ""; \
+		read -p "Voulez-vous installer fzf maintenant ? [O/n] " choix; \
+		if [ "$$choix" = "O" ] || [ "$$choix" = "o" ] || [ -z "$$choix" ]; then \
 			sudo apt update && sudo apt install -y fzf || echo "❌ Échec de l'installation de fzf."; \
 		else \
 			echo "⏭️  Installation skippée. Un menu classique sera utilisé."; \
@@ -35,7 +37,7 @@ check-deps: check-system
 		echo "   Pour GitHub : sudo apt install gh"; \
 		echo "   Pour GitLab : voir https://gitlab.com/gitlab-org/cli"; \
 		read -p "Voulez-vous installer gh (GitHub CLI) ? [O/n] " choix; \
-		if [ "$choix" = "O" ] || [ "$choix" = "o" ] || [ -z "$choix" ]; then \
+		if [ "$$choix" = "O" ] || [ "$$choix" = "o" ] || [ -z "$$choix" ]; then \
 			sudo apt update && sudo apt install -y gh || echo "❌ Échec de l'installation de gh."; \
 		else \
 			echo "⏭️  Installation skippée. Certaines fonctions seront indisponibles."; \
@@ -71,12 +73,18 @@ install: check-deps
 		fi; \
 		echo "✅ Installé localement : $(INSTALL_LOCAL)"; \
 		echo "🔗 Alias de compatibilité : $(COMPAT_LOCAL)"; \
+		echo ""; \
+		echo "💡 Pour configurer le mode silencieux :"; \
+		echo "   bash bin/setup-silent-mode.sh"; \
 	else \
 		echo "🛠️  Installation en mode global (/usr/local/bin)"; \
 		sudo ln -sf $(BIN_SOURCE) $(INSTALL_GLOBAL); \
 		sudo ln -sf $(BIN_SOURCE) $(COMPAT_GLOBAL); \
 		echo "✅ Installé globalement : $(INSTALL_GLOBAL)"; \
 		echo "🔗 Alias de compatibilité : $(COMPAT_GLOBAL)"; \
+		echo ""; \
+		echo "💡 Pour configurer le mode silencieux :"; \
+		echo "   bash bin/setup-silent-mode.sh"; \
 	fi
 
 # Désinstallation
