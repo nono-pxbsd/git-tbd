@@ -4,11 +4,59 @@ Un outil CLI simple et puissant pour gérer un workflow Git en mode **Trunk-Base
 
 ---
 
+## 📦 Prérequis
+
+### Obligatoires
+
+- **Git** : Gestion de versions
+  ```bash
+  sudo apt install git  # Ubuntu/Debian/WSL
+  ```
+
+- **Bash ou Zsh** : Shell Unix (généralement déjà installé)
+
+- **GitHub CLI** (`gh`) **OU** **GitLab CLI** (`glab`) : Gestion des PR/MR
+  ```bash
+  # Pour GitHub
+  sudo apt install gh
+  gh auth login
+  
+  # Pour GitLab
+  # Voir https://gitlab.com/gitlab-org/cli
+  glab auth login
+  ```
+
+### Fortement recommandés
+
+#### 🔍 fzf - Fuzzy Finder
+
+**fzf** améliore considérablement l'expérience utilisateur avec des menus interactifs modernes.
+
+**Installation** :
+
+```bash
+# Ubuntu / Debian / WSL
+sudo apt update && sudo apt install -y fzf
+
+# macOS
+brew install fzf
+
+# Arch Linux
+sudo pacman -S fzf
+
+# Fedora
+sudo dnf install fzf
+```
+
+**Sans fzf** : Un menu classique numéroté sera utilisé (fonctionnel mais moins pratique).
+
+---
+
 ## ✨ Fonctionnalités
 
 - 🚀 Crée automatiquement des branches `feature/xxx`, `fix/xxx`, etc.
 - 🎯 Sélection interactive du type de branche avec `fzf` (ou menu classique)
-- 🔁 Rebase la branche actuelle sur `main`
+- 📝 Rebase la branche actuelle sur `main`
 - 🔀 Merge proprement dans `main` avec **local-squash** (évite la désynchronisation)
 - 📦 Ouvre automatiquement une Pull Request / Merge Request
 - 🏷️ Gestion des versions avec tags SemVer (`bump`)
@@ -41,6 +89,36 @@ source ~/.zshrc  # ou ~/.bashrc
 - ✅ Installe le binaire `gittbd`
 - ✅ Crée un alias `git-tbd` pour rétrocompatibilité
 - ✅ Ajoute `~/.local/bin` au `$PATH` si nécessaire
+
+---
+
+## 🔇 Mode Silencieux
+
+Pour réduire la verbosité, exécutez après l'installation :
+
+```bash
+bash bin/setup-silent-mode.sh
+```
+
+Le script détectera automatiquement votre environnement (shell, système) et vous proposera plusieurs options :
+
+1. **Mode silencieux par défaut** : `gittbd` sera toujours silencieux
+2. **Alias `gittbds`** : Garde `gittbd` verbeux, crée `gittbds` silencieux
+3. **Les deux** : Maximum de flexibilité
+
+### Configuration manuelle (optionnel)
+
+Si vous préférez configurer manuellement :
+
+```bash
+# Mode silencieux par défaut
+echo 'export SILENT_MODE=true' >> ~/.zshrc  # ou ~/.bashrc
+source ~/.zshrc
+
+# OU créer un alias
+echo "alias gittbds='SILENT_MODE=true gittbd'" >> ~/.zshrc
+source ~/.zshrc
+```
 
 ---
 
@@ -185,7 +263,7 @@ gittbd b patch
 
 ---
 
-## 🔇 Mode Silencieux
+## 📇 Mode Silencieux détaillé
 
 Réduit la verbosité en n'affichant que les erreurs et succès finaux.
 
@@ -198,8 +276,8 @@ SILENT_MODE=true gittbd finish
 # Permanent (session)
 export SILENT_MODE=true
 
-# Permanent (shell)
-echo 'export SILENT_MODE=true' >> ~/.zshrc
+# Permanent (shell) - voir section installation ci-dessus
+bash bin/setup-silent-mode.sh
 ```
 
 ### Fonctions impactées
@@ -260,7 +338,7 @@ gittbd mr feature/test      # Crée une Merge Request
 gittbd validate feature/test  # Valide la MR
 
 # Les messages utilisent "MR" au lieu de "PR"
-# 🔍 Validation de la MR sur branche : feature/test
+# 📝 Validation de la MR sur branche : feature/test
 # ✅ MR trouvée
 ```
 
@@ -332,7 +410,7 @@ REQUIRE_PR_ON_FINISH=true
 
 ---
 
-## 🐧 Systèmes supportés
+## 🧭 Systèmes supportés
 
 - ✅ **Linux** (testé sous Ubuntu / Debian / WSL)
 - ⚠️ **macOS** : Non testé, devrait fonctionner
