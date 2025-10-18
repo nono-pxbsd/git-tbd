@@ -1,13 +1,17 @@
 BINARY_NAME = gittbd
+
+# Chemins source (repo de développement)
 BIN_SOURCE = $(CURDIR)/bin/$(BINARY_NAME)
-INSTALL_GLOBAL = /usr/local/bin/$(BINARY_NAME)
-INSTALL_LOCAL = $(HOME)/.local/bin/$(BINARY_NAME)
+LIB_SOURCE = $(CURDIR)/lib
 
-# Rétrocompatibilité (alias git-tbd)
-COMPAT_GLOBAL = /usr/local/bin/git-tbd
-COMPAT_LOCAL = $(HOME)/.local/bin/git-tbd
+# Chemins d'installation
+INSTALL_DIR_LOCAL = $(HOME)/.local/share/gittbd
+INSTALL_DIR_GLOBAL = /usr/local/share/gittbd
 
-MODE ?= global
+INSTALL_BIN_LOCAL = $(HOME)/.local/bin
+INSTALL_BIN_GLOBAL = /usr/local/bin
+
+MODE ?= local
 
 # Vérifie que le système est Linux
 check-system:
@@ -56,12 +60,17 @@ install: check-deps
 	@if [ ! -f "$(BIN_SOURCE)" ]; then \
 		echo "❌ Binaire introuvable à $(BIN_SOURCE)"; exit 1; \
 	fi
-	chmod +x $(BIN_SOURCE)
+	@chmod +x $(BIN_SOURCE)
 	@if [ "$(MODE)" = "local" ]; then \
-		echo "📦 Installation en mode local (~/.local/bin)"; \
-		mkdir -p $(HOME)/.local/bin; \
-		ln -sf $(BIN_SOURCE) $(INSTALL_LOCAL); \
-		ln -sf $(BIN_SOURCE) $(COMPAT_LOCAL); \
+		echo "📦 Installation en mode local (~/.local/share/gittbd)"; \
+		mkdir -p $(INSTALL_DIR_LOCAL)/bin; \
+		mkdir -p $(INSTALL_DIR_LOCAL)/lib; \
+		mkdir -p $(INSTALL_BIN_LOCAL); \
+		cp $(BIN_SOURCE) $(INSTALL_DIR_LOCAL)/bin/$(BINARY_NAME); \
+		cp -r $(LIB_SOURCE)/* $(INSTALL_DIR_LOCAL)/lib/; \
+		chmod +x $(INSTALL_DIR_LOCAL)/bin/$(BINARY_NAME); \
+		ln -sf $(INSTALL_DIR_LOCAL)/bin/$(BINARY_NAME) $(INSTALL_BIN_LOCAL)/$(BINARY_NAME); \
+		ln -sf $(INSTALL_DIR_LOCAL)/bin/$(BINARY_NAME) $(INSTALL_BIN_LOCAL)/git-tbd; \
 		if [ -n "$$ZSH_VERSION" ]; then shellrc="$$HOME/.zshrc"; \
 		elif [ -n "$$BASH_VERSION" ]; then shellrc="$$HOME/.bashrc"; \
 		else shellrc="$$HOME/.profile"; fi; \
@@ -71,17 +80,22 @@ install: check-deps
 		else \
 			echo "ℹ️  PATH local déjà présent dans $$shellrc"; \
 		fi; \
-		echo "✅ Installé localement : $(INSTALL_LOCAL)"; \
-		echo "🔗 Alias de compatibilité : $(COMPAT_LOCAL)"; \
+		echo "✅ Installé localement : $(INSTALL_DIR_LOCAL)"; \
+		echo "🔗 Binaires : $(INSTALL_BIN_LOCAL)/gittbd et git-tbd"; \
 		echo ""; \
 		echo "💡 Pour configurer le mode silencieux :"; \
 		echo "   bash bin/setup-silent-mode.sh"; \
 	else \
-		echo "🛠️  Installation en mode global (/usr/local/bin)"; \
-		sudo ln -sf $(BIN_SOURCE) $(INSTALL_GLOBAL); \
-		sudo ln -sf $(BIN_SOURCE) $(COMPAT_GLOBAL); \
-		echo "✅ Installé globalement : $(INSTALL_GLOBAL)"; \
-		echo "🔗 Alias de compatibilité : $(COMPAT_GLOBAL)"; \
+		echo "🛠️  Installation en mode global (/usr/local/share/gittbd)"; \
+		sudo mkdir -p $(INSTALL_DIR_GLOBAL)/bin; \
+		sudo mkdir -p $(INSTALL_DIR_GLOBAL)/lib; \
+		sudo cp $(BIN_SOURCE) $(INSTALL_DIR_GLOBAL)/bin/$(BINARY_NAME); \
+		sudo cp -r $(LIB_SOURCE)/* $(INSTALL_DIR_GLOBAL)/lib/; \
+		sudo chmod +x $(INSTALL_DIR_GLOBAL)/bin/$(BINARY_NAME); \
+		sudo ln -sf $(INSTALL_DIR_GLOBAL)/bin/$(BINARY_NAME) $(INSTALL_BIN_GLOBAL)/$(BINARY_NAME); \
+		sudo ln -sf $(INSTALL_DIR_GLOBAL)/bin/$(BINARY_NAME) $(INSTALL_BIN_GLOBAL)/git-tbd; \
+		echo "✅ Installé globalement : $(INSTALL_DIR_GLOBAL)"; \
+		echo "🔗 Binaires : $(INSTALL_BIN_GLOBAL)/gittbd et git-tbd"; \
 		echo ""; \
 		echo "💡 Pour configurer le mode silencieux :"; \
 		echo "   bash bin/setup-silent-mode.sh"; \
@@ -89,12 +103,22 @@ install: check-deps
 
 # Désinstallation
 uninstall:
-	@rm -f $(INSTALL_GLOBAL) $(INSTALL_LOCAL) $(COMPAT_GLOBAL) $(COMPAT_LOCAL)
-	@echo "❌ Commandes supprimées (gittbd + git-tbd)"
+	@if [ -d "$(INSTALL_DIR_LOCAL)" ]; then \
+		rm -rf $(INSTALL_DIR_LOCAL); \
+		rm -f $(INSTALL_BIN_LOCAL)/$(BINARY_NAME); \
+		rm -f $(INSTALL_BIN_LOCAL)/git-tbd; \
+		echo "✅ Installation locale supprimée"; \
+	fi
+	@if [ -d "$(INSTALL_DIR_GLOBAL)" ]; then \
+		sudo rm -rf $(INSTALL_DIR_GLOBAL); \
+		sudo rm -f $(INSTALL_BIN_GLOBAL)/$(BINARY_NAME); \
+		sudo rm -f $(INSTALL_BIN_GLOBAL)/git-tbd; \
+		echo "✅ Installation globale supprimée"; \
+	fi
 
 # Publication d'un tag Git
 release:
-	@read -p "Version (ex: v2.0.0) : " v; \
+	@read -p "Version (ex: v2.1.0) : " v; \
 	git tag $$v -m "Release $$v" && git push origin $$v && echo "✅ Tag $$v publié !"
 
 # Tests (optionnel)
