@@ -421,7 +421,7 @@ publish() {
   log_info "🚀 Publication de la branche '${CYAN}$branch${RESET}' vers origin..."
   
   if [[ "$force_push" == true ]]; then
-    log_warn "⚠️  Force push en cours (avec --force-with-lease pour sécurité)"
+    log_info "🔧 Force push sécurisé (après modification d'historique local)"
     git_safe push -u origin "$branch" --force-with-lease || {
       local exit_code=$?
       log_error "Échec du force push"
@@ -441,7 +441,7 @@ publish() {
     }
   fi
 
-  log_success "✅ Branche publiée avec succès"
+  log_success "Branche publiée avec succès"
 }
 
 # ====================================
