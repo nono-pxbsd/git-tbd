@@ -7,6 +7,45 @@ et ce projet adhère à [Semantic Versioning](https://semver.org/lang/fr/).
 
 ---
 
+## [2.2.1] - 2025-10-18
+
+### 🛠️ Corrections
+
+#### CI/CD - ShellCheck annotations
+
+- **Fix** : Ajout des annotations `# shellcheck source=` pour les fichiers lib
+- **Problème** : ShellCheck ne pouvait pas suivre les `source` dynamiques (`${LIB_DIR}/...`)
+- **Solution** : Annotations explicites pour chaque fichier sourcé
+
+**Fichiers modifiés** :
+```bash
+# shellcheck source=lib/config.sh
+source "${LIB_DIR}/config.sh"
+# shellcheck source=lib/utils.sh
+source "${LIB_DIR}/utils.sh"
+# shellcheck source=lib/branches.sh
+source "${LIB_DIR}/branches.sh"
+# shellcheck source=lib/commands.sh
+source "${LIB_DIR}/commands.sh"
+```
+
+**Résultat** :
+- ✅ ShellCheck peut analyser le contenu des fichiers lib
+- ✅ Détection des variables non définies
+- ✅ Vérification des fonctions utilisées
+- ✅ CI/CD passe au vert
+
+---
+
+### 🧹 Maintenance
+
+- Nettoyage des fichiers de test temporaires
+  - Suppression de `test.txt`, `test-finish-debug.txt`
+  - Suppression des scripts `tests/debug_*.sh`
+  - Conservation de `tests/test_prompts.sh` (vraie suite de tests)
+
+---
+
 ## [2.2.0] - 2025-10-18
 
 ### ✨ Nouvelles fonctionnalités
@@ -429,6 +468,9 @@ Aucun ! La v2.0 est **rétrocompatible** avec v1.x :
 ---
 
 ## Contributeurs
+
+### v2.2.1
+- **nono.pxbsd** : Fix CI/CD ShellCheck annotations, nettoyage fichiers de test
 
 ### v2.2.0
 - **nono.pxbsd** : Commande gittbds, amélioration help, fix permissions
