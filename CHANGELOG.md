@@ -7,6 +7,144 @@ et ce projet adhère à [Semantic Versioning](https://semver.org/lang/fr/).
 
 ---
 
+## [2.1.0] - 2025-01-XX
+
+### ✨ Nouvelles fonctionnalités
+
+#### `publish` avec gestion intelligente des branches divergées
+
+Ajout d'un système complet pour gérer les branches qui ont divergé d'origin (après `git commit --amend`, rebase local, ou push concurrent).
+
+**Nouvelle configuration dans `lib/config.sh`** :
+```bash
+# Stratégie par défaut : "ask" | "force-push" | "force-sync"
+DEFAULT_DIVERGED_STRATEGY="ask"
+
+# Fallback en mode silencieux
+SILENT_DIVERGED_FALLBACK="force-push"
+```
+
+**Nouveau flag** :
+- `gittbd publish --force` : Détection intelligente selon l'état de la branche
+  - `ahead` → Push normal
+  - `behind` → Sync automatique
+  - `diverged` → Selon `DEFAULT_DIVERGED_STRATEGY`
+
+**Comportements selon la configuration** :
+
+| Configuration | Comportement sur diverged |
+|---------------|--------------------------|
+| `strategy="ask"` (défaut) | Prompt interactif (sauf mode silencieux) |
+| `strategy="force-push"` | Force push automatique |
+| `strategy="force-sync"` | Sync (rebase) automatique |
+
+**Prompt interactif** (avec `strategy="ask"`) :
+```
+⚠️  Branche divergée détectée
+
+Quelle stratégie utiliser ?
+
+  1. Force push (local écrase origin)
+     → Recommandé après amend/rebase/squash local
+
+  2. Sync puis push (rebase origin dans local)
+     → Recommandé si quelqu'un a pushé pendant que vous travailliez
+
+Choix [1/2] : _
+```
+
+**Mode silencieux** :
+- Si `strategy="ask"` → Utilise automatiquement `SILENT_DIVERGED_FALLBACK`
+- Pas de prompt bloquant en CI/CD
+
+**Documentation** :
+- Ajout d'une section complète dans README.md avec cas d'usage
+- 4 profils d'équipe documentés (solo, TBD standard, collaboratif, prudent)
+
+---
+
+### 🔧 Améliorations
+
+#### Messages d'erreur enrichis
+
+Quand une branche a divergé sans flag `--force` :
+```bash
+❌ La branche 'feature/test' a divergé d'origin/feature/test
+
+💡 Options :
+
+  • gittbd publish --force           : Résolution automatique
+  • gittbd publish --force-sync      : Force le rebase
+  • gittbd publish --force-push      : Force le push (destructif)
+
+📝 Cas typique : après git commit --amend ou rebase
+   → Utilisez --force ou --force-push
+```
+
+#### Flags explicites prioritaires
+
+Les flags `--force-push` et `--force-sync` bypass toujours le prompt, quelle que soit la configuration.
+
+```bash
+# Toujours force push (pas de prompt)
+gittbd publish --force-push
+
+# Toujours sync (pas de prompt)
+gittbd publish --force-sync
+```
+
+---
+
+### 📚 Documentation
+
+- **README.md** : Section "Cas d'usage" avec 4 profils d'équipe
+- **README.md** : Tableau récapitulatif des stratégies
+- **README.md** : Guide de diagnostic "Pourquoi ma branche a divergé ?"
+- **config.sh** : Commentaires enrichis sur les stratégies
+
+---
+
+### 🎯 Migration
+
+**Rétrocompatibilité** : ✅ Totale
+
+- Les commandes existantes fonctionnent sans changement
+- `DEFAULT_DIVERGED_STRATEGY="ask"` par défaut (comportement sûr)
+- Pour retrouver l'ancien comportement "force tout" : `DEFAULT_DIVERGED_STRATEGY="force-push"`
+
+**Action recommandée** :
+1. Lisez la section "Cas d'usage" dans README.md
+2. Choisissez la configuration adaptée à votre workflow
+3. Ajustez `lib/config.sh` si nécessaire
+
+---
+
+### 🐛 Corrections
+
+- Résout le problème de `gittbd publish` qui échouait après `git commit --amend`
+- Messages d'erreur plus clairs et actionnables sur branche divergée
+
+---
+
+### 🔍 Détails techniques
+
+**Fichiers modifiés** :
+- `lib/config.sh` : Ajout de 2 variables
+- `lib/commands.sh` : Refonte de `publish()`
+- `README.md` : Nouvelle section cas d'usage
+
+**Tests manuels validés** :
+- ✅ Branche synced → Push normal
+- ✅ Branche ahead → Push normal
+- ✅ Branche behind → Sync automatique avec `--force`
+- ✅ Branche diverged + `strategy="ask"` → Prompt
+- ✅ Branche diverged + `strategy="force-push"` → Force push
+- ✅ Branche diverged + `strategy="force-sync"` → Sync
+- ✅ Mode silencieux → Utilise fallback
+- ✅ Flags explicites → Bypass prompt
+
+---
+
 ## [2.0.0] - 2025-01-XX
 
 ### 🎉 Version majeure avec refonte complète
@@ -23,7 +161,7 @@ et ce projet adhère à [Semantic Versioning](https://semver.org/lang/fr/).
   - Mode complet : `gittbd start feature/name`
   - Mode semi-interactif : `gittbd start name` (fzf pour le type)
   - Mode full interactif : `gittbd start` (fzf + prompt nom)
-- **Émojis configurables** : Variable `USE_EMOJI_IN_COMMIT_TITLE` pour activer/désactiver
+- **Émojis configurables** : Variable `USE_EMOJI_IN_COMMIT_TITLE` dans config
 - **Terminologie adaptative** : Messages utilisent "PR" (GitHub) ou "MR" (GitLab) automatiquement
 
 #### Infrastructure
@@ -66,7 +204,7 @@ et ce projet adhère à [Semantic Versioning](https://semver.org/lang/fr/).
 - **Code réutilisable** : Fonctions atomiques et composables
 - **Commentaires améliorés** : Documentation inline claire
 
-### 🐛 Corrections
+### 🛠 Corrections
 
 - **Messages dupliqués** : Suppression des logs redondants
 - **Prompts bloquants** : Résolution des deadlocks d'affichage
@@ -88,17 +226,6 @@ Aucun ! La v2.0 est **rétrocompatible** avec v1.x :
 - `git-tbd` reste disponible comme alias
 - Toutes les commandes v1 fonctionnent encore
 - Configuration v1 compatible (nouvelles options ajoutées)
-
-### 📦 Migration
-
-Voir [MIGRATION.md](MIGRATION.md) pour le guide complet.
-
-**Étapes résumées** :
-1. Backup de l'ancienne version
-2. Téléchargement des nouveaux fichiers
-3. Désinstallation de v1
-4. Installation de v2
-5. Tests de validation
 
 ---
 
@@ -128,19 +255,19 @@ Voir [MIGRATION.md](MIGRATION.md) pour le guide complet.
 
 ### 🔮 Prévu pour les prochaines versions
 
-#### v2.1.0 (minor)
+#### v2.2.0 (minor)
 - [ ] Commande `gittbd config` pour éditer la config interactivement
 - [ ] Hooks pre-commit automatiques
 - [ ] Template de message de commit personnalisable
 - [ ] Support de Gitea/Forgejo
 
-#### v2.2.0 (minor)
+#### v2.3.0 (minor)
 - [ ] Commande `gittbd status` : Vue d'ensemble du repo
 - [ ] Commande `gittbd list` : Liste des branches en cours
 - [ ] Intégration avec `gh` pour review automatique
 - [ ] Statistiques de workflow (temps moyen, nombre de branches, etc.)
 
-#### v2.3.0 (minor)
+#### v2.4.0 (minor)
 - [ ] Support de feature flags
 - [ ] Intégration CI/CD (templates GitHub Actions / GitLab CI)
 - [ ] Génération automatique de CHANGELOG.md
@@ -154,127 +281,16 @@ Voir [MIGRATION.md](MIGRATION.md) pour le guide complet.
 
 ---
 
-## Historique des versions
-
-### Légende des symboles
-
-- ✨ Nouvelle fonctionnalité
-- 🔧 Amélioration
-- 🐛 Correction de bug
-- 🗑️ Suppression
-- ⚠️ Breaking change
-- 📚 Documentation
-- 🧪 Tests
-
----
-
-## Comparaison des versions
-
-| Fonctionnalité | v1.0 | v2.0 |
-|----------------|------|------|
-| **Plateformes** |
-| GitHub | ✅ | ✅ |
-| GitLab | ❌ | ✅ |
-| **Commandes** |
-| start | ✅ | ✅ (+ fzf) |
-| finish | ✅ | ✅ (+ amélioré) |
-| publish | ✅ | ✅ |
-| pr | ✅ | ✅ (+ alias mr) |
-| validate | ✅ | ✅ (+ phases claires) |
-| sync | ✅ | ✅ |
-| bump | ❌ | ✅ (nouveau) |
-| **Raccourcis** |
-| Alias courts | ❌ | ✅ (s, f, v, p, b) |
-| **UX** |
-| fzf | ❌ | ✅ |
-| Mode silencieux | ⚠️ Basique | ✅ Complet |
-| Messages adaptés | ❌ | ✅ (PR/MR) |
-| Suggestions | ⚠️ Limité | ✅ Contextuel |
-| **Fiabilité** |
-| Race conditions | ❌ | ✅ Corrigé |
-| Prompts bloquants | ❌ | ✅ Corrigé |
-| Gestion d'erreurs | ⚠️ Basique | ✅ Robuste |
-| **Documentation** |
-| README | ⚠️ Basique | ✅ Complet |
-| Guides | ❌ | ✅ (3 guides) |
-| Tests | ❌ | ✅ |
-
----
-
-## Notes de migration
-
-### De v1.0 à v2.0
-
-**Compatibilité** : ✅ Rétrocompatible à 100%
-
-**Action requise** : Aucune, mais recommandé :
-1. Mettre à jour les scripts utilisant `git-tbd` → `gittbd`
-2. Configurer `GIT_PLATFORM` si vous utilisez GitLab
-3. Tester le mode silencieux pour CI/CD
-4. Profiter des raccourcis (`s`, `f`, etc.)
-
-**Nouvelles variables de config** :
-```bash
-USE_EMOJI_IN_COMMIT_TITLE=true  # Nouveau
-GIT_PLATFORM="github"           # Nouveau
-```
-
----
-
-## Roadmap
-
-### Court terme (3 mois)
-- ✅ v2.0.0 : Refonte complète + support GitLab
-- 🔄 v2.1.0 : Configuration interactive + hooks
-- 📅 v2.2.0 : Statistiques + dashboard
-
-### Moyen terme (6-12 mois)
-- 📅 v2.3.0 : Feature flags + CI/CD templates
-- 📅 v2.4.0 : Multi-repo support
-- 📅 v2.5.0 : Plugins system
-
-### Long terme (12+ mois)
-- 📅 v3.0.0 : Réécriture en Rust
-- 📅 v3.1.0 : Support Windows natif
-- 📅 v3.2.0 : Interface graphique (TUI)
-
----
-
 ## Contributeurs
+
+### v2.1.0
+- **nono.pxbsd** : Gestion intelligente branches divergées, documentation cas d'usage
 
 ### v2.0.0
 - **nono.pxbsd** : Refonte complète, support GitLab, documentation
 
 ### v1.0.0
 - **nono.pxbsd** : Création initiale
-
----
-
-## Feedback et contributions
-
-Nous encourageons les contributions ! Voici comment aider :
-
-### Signaler un bug
-1. Vérifier que le bug n'existe pas déjà dans les issues
-2. Ouvrir une issue avec :
-   - Version de gittbd (`gittbd help`)
-   - Système d'exploitation
-   - Commande exécutée
-   - Erreur rencontrée
-   - Logs en mode debug (`DEBUG_MODE=true gittbd ...`)
-
-### Proposer une fonctionnalité
-1. Ouvrir une issue "Feature Request"
-2. Décrire le cas d'usage
-3. Proposer une implémentation si possible
-
-### Contribuer du code
-1. Fork le projet
-2. Créer une branche : `gittbd start feature/ma-feature`
-3. Coder avec les conventions du projet
-4. Ajouter des tests si applicable
-5. Documenter dans le README si nécessaire
-6. Ouvrir une PR : `gittbd pr`
 
 ---
 
