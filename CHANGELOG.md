@@ -7,6 +7,77 @@ et ce projet adhère à [Semantic Versioning](https://semver.org/lang/fr/).
 
 ---
 
+## [2.1.1] - 2025-10-18
+
+### 📚 Documentation
+
+#### Installation simplifiée avec workflow symlinks
+
+Refonte complète de la section installation du README pour clarifier le workflow recommandé :
+
+**Nouveau workflow** :
+```bash
+# Clone dans ~/.local/share/gittbd/ (avec .git/)
+git clone https://github.com/nono-pxbsd/git-tbd.git ~/.local/share/gittbd
+
+# Installation (crée des symlinks)
+cd ~/.local/share/gittbd
+make install MODE=local
+
+# Mises à jour futures (pas besoin de réinstaller)
+cd ~/.local/share/gittbd
+git pull
+```
+
+**Avantages** :
+- ✅ Mises à jour simplifiées via `git pull`
+- ✅ Symlinks pointent toujours vers la dernière version
+- ✅ Pas de réinstallation nécessaire après mise à jour
+- ✅ Le repo contient `.git/` pour les futures mises à jour
+
+**Documentation ajoutée** :
+- Section "Mettre à jour gittbd" dans README.md
+- Clarification du chemin de configuration : `~/.local/share/gittbd/lib/config.sh`
+- Explication des avantages du workflow avec symlinks
+
+### 🔧 Améliorations
+
+- **Makefile** : Utilise déjà `ln -sf` (symlinks) au lieu de copier les fichiers
+- **README.md** : 97 lignes ajoutées pour clarifier l'installation et les mises à jour
+- **Setup silencieux** : Chemin corrigé pour pointer vers `~/.local/share/gittbd/bin/setup-silent-mode.sh`
+
+### 📋 Commits inclus
+
+- Merge PR #28 : Simplification installation et upgrade ([7c1137c](https://github.com/nono-pxbsd/git-tbd/commit/7c1137c))
+- Merge PR #27 : Configuration installation séparée ([588d32f](https://github.com/nono-pxbsd/git-tbd/commit/588d32f))
+- Fix : Installation séparée du répertoire de développement ([61e2950](https://github.com/nono-pxbsd/git-tbd/commit/61e2950))
+- Merge PR #26 : Correction tags de version ([284621e](https://github.com/nono-pxbsd/git-tbd/commit/284621e))
+- Docs : Migration tags v0.x → v2.x ([71fa99a](https://github.com/nono-pxbsd/git-tbd/commit/71fa99a))
+- Merge PR #25 : Correction tags de version ([978afe2](https://github.com/nono-pxbsd/git-tbd/commit/978afe2))
+- Merge PR #23 : Amélioration message force push ([ed27180](https://github.com/nono-pxbsd/git-tbd/commit/ed27180))
+
+### 🎯 Migration
+
+**Aucune action requise** pour les utilisateurs existants.
+
+Si vous avez déjà installé gittbd via l'ancienne méthode et souhaitez profiter du nouveau workflow :
+
+```bash
+# 1. Désinstaller l'ancienne version
+make uninstall
+
+# 2. Supprimer l'ancien répertoire (si existant)
+rm -rf ~/.local/share/gittbd
+
+# 3. Réinstaller avec le nouveau workflow
+git clone https://github.com/nono-pxbsd/git-tbd.git ~/.local/share/gittbd
+cd ~/.local/share/gittbd
+make install MODE=local
+source ~/.zshrc  # ou ~/.bashrc
+```
+
+---
+
 ## [2.1.0] - 2025-01-XX
 
 ### ✨ Nouvelles fonctionnalités
@@ -40,7 +111,7 @@ SILENT_DIVERGED_FALLBACK="force-push"
 
 **Prompt interactif** (avec `strategy="ask"`) :
 ```
-⚠️  Branche divergée détectée
+⚠️ Branche divergée détectée
 
 Quelle stratégie utiliser ?
 
@@ -77,7 +148,7 @@ Quand une branche a divergé sans flag `--force` :
   • gittbd publish --force-sync      : Force le rebase
   • gittbd publish --force-push      : Force le push (destructif)
 
-📝 Cas typique : après git commit --amend ou rebase
+🔍 Cas typique : après git commit --amend ou rebase
    → Utilisez --force ou --force-push
 ```
 
@@ -119,7 +190,7 @@ gittbd publish --force-sync
 
 ---
 
-### 🐛 Corrections
+### 🛠️ Corrections
 
 - Résout le problème de `gittbd publish` qui échouait après `git commit --amend`
 - Messages d'erreur plus clairs et actionnables sur branche divergée
@@ -204,7 +275,7 @@ gittbd publish --force-sync
 - **Code réutilisable** : Fonctions atomiques et composables
 - **Commentaires améliorés** : Documentation inline claire
 
-### 🛠 Corrections
+### 🛠️ Corrections
 
 - **Messages dupliqués** : Suppression des logs redondants
 - **Prompts bloquants** : Résolution des deadlocks d'affichage
@@ -251,37 +322,10 @@ Aucun ! La v2.0 est **rétrocompatible** avec v1.x :
 
 ---
 
-## [Unreleased]
-
-### 🔮 Prévu pour les prochaines versions
-
-#### v2.2.0 (minor)
-- [ ] Commande `gittbd config` pour éditer la config interactivement
-- [ ] Hooks pre-commit automatiques
-- [ ] Template de message de commit personnalisable
-- [ ] Support de Gitea/Forgejo
-
-#### v2.3.0 (minor)
-- [ ] Commande `gittbd status` : Vue d'ensemble du repo
-- [ ] Commande `gittbd list` : Liste des branches en cours
-- [ ] Intégration avec `gh` pour review automatique
-- [ ] Statistiques de workflow (temps moyen, nombre de branches, etc.)
-
-#### v2.4.0 (minor)
-- [ ] Support de feature flags
-- [ ] Intégration CI/CD (templates GitHub Actions / GitLab CI)
-- [ ] Génération automatique de CHANGELOG.md
-- [ ] Export de métriques pour dashboards
-
-#### v3.0.0 (major)
-- [ ] Refonte en Rust pour meilleures performances
-- [ ] Support Windows natif (sans WSL)
-- [ ] Interface TUI (Terminal User Interface)
-- [ ] Plugin VSCode / JetBrains
-
----
-
 ## Contributeurs
+
+### v2.1.1
+- **nono.pxbsd** : Simplification installation avec workflow symlinks, documentation
 
 ### v2.1.0
 - **nono.pxbsd** : Gestion intelligente branches divergées, documentation cas d'usage
