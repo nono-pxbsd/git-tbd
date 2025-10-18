@@ -7,6 +7,30 @@ et ce projet adhère à [Semantic Versioning](https://semver.org/lang/fr/).
 
 ---
 
+## [2.2.2] - 2025-10-18
+
+### 🛠️ Corrections
+
+#### CI/CD - Configuration ShellCheck globale
+
+- **Fix** : Ajout du fichier `.shellcheckrc` pour ignorer les warnings non pertinents
+- **Problème** : Les annotations `# shellcheck source=` ne fonctionnaient pas en CI/CD car les chemins relatifs ne correspondaient pas
+- **Solution** : Configuration globale via `.shellcheckrc`
+
+**Configuration ajoutée** :
+```bash
+# .shellcheckrc
+disable=SC1091  # Source dynamiques non suivis
+disable=SC2034  # Variables de couleur définies mais "non utilisées"
+```
+
+**Résultat** :
+- ✅ CI/CD passe au vert
+- ✅ ShellCheck analyse le code sans faux positifs
+- ✅ Configuration centralisée et maintenable
+
+---
+
 ## [2.2.1] - 2025-10-18
 
 ### 🛠️ Corrections
