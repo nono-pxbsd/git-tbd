@@ -1,0 +1,10 @@
+# Configuration ShellCheck pour gittbd
+
+# SC1091: Not following: ./lib/*.sh was not specified as input
+# Les fichiers lib sont sourcés dynamiquement, ShellCheck ne peut pas les suivre en CI/CD
+disable=SC1091
+
+# SC2034: Variable appears unused
+# Les variables de couleur (GREEN, YELLOW, etc.) sont définies dans config.sh
+# et utilisées dans les fonctions de log, mais ShellCheck ne le voit pas toujours
+disable=SC2034
