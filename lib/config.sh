@@ -51,3 +51,26 @@ OPEN_PR="${OPEN_PR:-true}"
 
 # Exiger une PR/MR pour finaliser une branche
 REQUIRE_PR_ON_FINISH="${REQUIRE_PR_ON_FINISH:-true}"
+
+# ====================================
+# Gestion des branches divergées
+# ====================================
+
+# Stratégie par défaut quand une branche a divergé avec origin
+# (après git commit --amend, rebase, ou push concurrent)
+#
+# Options :
+#   - "ask"         : Demande à l'utilisateur quelle action prendre (défaut)
+#                     Le prompt n'apparaît QUE sur branche divergée avec --force
+#   - "force-push"  : Force push direct (assume réécriture locale intentionnelle)
+#   - "force-sync"  : Sync (rebase) puis push (assume push concurrent)
+#
+# Cas d'usage :
+#   - Travail solo / branche perso     → "force-push" (pas de prompt)
+#   - Workflow TBD classique           → "ask" (sécurité)
+#   - Collaboration sur même branche   → "force-sync" (intègre les changements)
+DEFAULT_DIVERGED_STRATEGY="${DEFAULT_DIVERGED_STRATEGY:-ask}"
+
+# En mode silencieux (CI/CD), si strategy = "ask", utiliser ce fallback
+# Le mode silencieux évite les prompts bloquants tout en permettant l'automatisation
+SILENT_DIVERGED_FALLBACK="${SILENT_DIVERGED_FALLBACK:-force-push}"
