@@ -147,30 +147,51 @@ rm -rf ~/.local/share/gittbd
 
 ## 📇 Mode Silencieux
 
-Pour réduire la verbosité, exécutez après l'installation :
+### 🔇 Commande `gittbds` (recommandé)
+
+Depuis l'installation, vous disposez automatiquement de la commande **`gittbds`** (avec "s" pour silent) :
 
 ```bash
+# Mode normal (verbeux)
+gittbd finish
+
+# Mode silencieux (minimal)
+gittbds finish
+```
+
+**Avantages** :
+- ✅ Pas de configuration nécessaire
+- ✅ Fonctionne partout (shell, scripts, CI/CD)
+- ✅ Plus simple que `SILENT_MODE=true gittbd ...`
+
+### Configuration avancée (optionnel)
+
+Si vous préférez que `gittbd` soit silencieux **par défaut** :
+
+```bash
+# Exécuter le script de configuration
 bash ~/.local/share/gittbd/bin/setup-silent-mode.sh
 ```
 
-Le script détectera automatiquement votre environnement (shell, système) et vous proposera plusieurs options :
+Le script vous proposera plusieurs options :
 
 1. **Mode silencieux par défaut** : `gittbd` sera toujours silencieux
-2. **Alias `gittbds`** : Garde `gittbd` verbeux, crée `gittbds` silencieux
+2. **Alias `gittbds`** : Garde `gittbd` verbeux, crée un alias shell `gittbds`
 3. **Les deux** : Maximum de flexibilité
 
-### Configuration manuelle (optionnel)
-
-Si vous préférez configurer manuellement :
+### Configuration manuelle
 
 ```bash
 # Mode silencieux par défaut
 echo 'export SILENT_MODE=true' >> ~/.zshrc  # ou ~/.bashrc
 source ~/.zshrc
 
-# OU créer un alias
+# OU créer un alias shell (si vous préférez)
 echo "alias gittbds='SILENT_MODE=true gittbd'" >> ~/.zshrc
 source ~/.zshrc
+
+# OU utiliser la variable ponctuellement
+SILENT_MODE=true gittbd finish
 ```
 
 ---

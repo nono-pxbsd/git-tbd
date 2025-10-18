@@ -1,7 +1,9 @@
 BINARY_NAME = gittbd
+BINARY_SILENT = gittbds
 
 # Chemins source (repo de développement)
 BIN_SOURCE = $(CURDIR)/bin/$(BINARY_NAME)
+BIN_SILENT_SOURCE = $(CURDIR)/bin/$(BINARY_SILENT)
 LIB_SOURCE = $(CURDIR)/lib
 
 # Chemins d'installation
@@ -31,7 +33,7 @@ check-deps: check-system
 		if [ "$$choix" = "O" ] || [ "$$choix" = "o" ] || [ -z "$$choix" ]; then \
 			sudo apt update && sudo apt install -y fzf || echo "❌ Échec de l'installation de fzf."; \
 		else \
-			echo "⏭️  Installation skippée. Un menu classique sera utilisé."; \
+			echo "⭐️  Installation skippée. Un menu classique sera utilisé."; \
 		fi \
 	else \
 		echo "✅ fzf trouvé."; \
@@ -44,7 +46,7 @@ check-deps: check-system
 		if [ "$$choix" = "O" ] || [ "$$choix" = "o" ] || [ -z "$$choix" ]; then \
 			sudo apt update && sudo apt install -y gh || echo "❌ Échec de l'installation de gh."; \
 		else \
-			echo "⏭️  Installation skippée. Certaines fonctions seront indisponibles."; \
+			echo "⭐️  Installation skippée. Certaines fonctions seront indisponibles."; \
 		fi \
 	else \
 		if command -v gh >/dev/null 2>&1; then \
@@ -60,11 +62,16 @@ install: check-deps
 	@if [ ! -f "$(BIN_SOURCE)" ]; then \
 		echo "❌ Binaire introuvable à $(BIN_SOURCE)"; exit 1; \
 	fi
+	@if [ ! -f "$(BIN_SILENT_SOURCE)" ]; then \
+		echo "❌ Binaire silencieux introuvable à $(BIN_SILENT_SOURCE)"; exit 1; \
+	fi
 	@chmod +x $(BIN_SOURCE)
+	@chmod +x $(BIN_SILENT_SOURCE)
 	@if [ "$(MODE)" = "local" ]; then \
 		echo "📦 Installation en mode local"; \
 		mkdir -p $(INSTALL_BIN_LOCAL); \
 		ln -sf $(BIN_SOURCE) $(INSTALL_BIN_LOCAL)/$(BINARY_NAME); \
+		ln -sf $(BIN_SILENT_SOURCE) $(INSTALL_BIN_LOCAL)/$(BINARY_SILENT); \
 		ln -sf $(BIN_SOURCE) $(INSTALL_BIN_LOCAL)/git-tbd; \
 		if [ -n "$$ZSH_VERSION" ]; then shellrc="$$HOME/.zshrc"; \
 		elif [ -n "$$BASH_VERSION" ]; then shellrc="$$HOME/.bashrc"; \
@@ -76,6 +83,7 @@ install: check-deps
 			echo "ℹ️  PATH local déjà présent dans $$shellrc"; \
 		fi; \
 		echo "✅ Installé localement : $(INSTALL_BIN_LOCAL)/$(BINARY_NAME)"; \
+		echo "🔇 Version silencieuse : $(INSTALL_BIN_LOCAL)/$(BINARY_SILENT)"; \
 		echo "🔗 Alias de compatibilité : $(INSTALL_BIN_LOCAL)/git-tbd"; \
 		echo ""; \
 		echo "💡 Pour configurer le mode silencieux :"; \
@@ -83,8 +91,10 @@ install: check-deps
 	else \
 		echo "🛠️  Installation en mode global"; \
 		sudo ln -sf $(BIN_SOURCE) $(INSTALL_BIN_GLOBAL)/$(BINARY_NAME); \
+		sudo ln -sf $(BIN_SILENT_SOURCE) $(INSTALL_BIN_GLOBAL)/$(BINARY_SILENT); \
 		sudo ln -sf $(BIN_SOURCE) $(INSTALL_BIN_GLOBAL)/git-tbd; \
 		echo "✅ Installé globalement : $(INSTALL_BIN_GLOBAL)/$(BINARY_NAME)"; \
+		echo "🔇 Version silencieuse : $(INSTALL_BIN_GLOBAL)/$(BINARY_SILENT)"; \
 		echo "🔗 Alias de compatibilité : $(INSTALL_BIN_GLOBAL)/git-tbd"; \
 		echo ""; \
 		echo "💡 Pour configurer le mode silencieux :"; \
@@ -93,13 +103,13 @@ install: check-deps
 
 # Désinstallation
 uninstall:
-	@rm -f $(INSTALL_BIN_LOCAL)/$(BINARY_NAME) $(INSTALL_BIN_LOCAL)/git-tbd
-	@sudo rm -f $(INSTALL_BIN_GLOBAL)/$(BINARY_NAME) $(INSTALL_BIN_GLOBAL)/git-tbd 2>/dev/null || true
+	@rm -f $(INSTALL_BIN_LOCAL)/$(BINARY_NAME) $(INSTALL_BIN_LOCAL)/$(BINARY_SILENT) $(INSTALL_BIN_LOCAL)/git-tbd
+	@sudo rm -f $(INSTALL_BIN_GLOBAL)/$(BINARY_NAME) $(INSTALL_BIN_GLOBAL)/$(BINARY_SILENT) $(INSTALL_BIN_GLOBAL)/git-tbd 2>/dev/null || true
 	@echo "✅ Symlinks supprimés"
 
 # Publication d'un tag Git
 release:
-	@read -p "Version (ex: v2.1.0) : " v; \
+	@read -p "Version (ex: v2.2.0) : " v; \
 	git tag $$v -m "Release $$v" && git push origin $$v && echo "✅ Tag $$v publié !"
 
 # Tests (optionnel)

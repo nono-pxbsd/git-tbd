@@ -1,0 +1,7 @@
+#!/bin/bash
+# gittbds : Version silencieuse de gittbd
+# Force automatiquement SILENT_MODE=true
+# Usage : gittbds <commande> [options]
+
+export SILENT_MODE=true
+exec "$(dirname "$(readlink -f "$0")")/gittbd" "$@"
