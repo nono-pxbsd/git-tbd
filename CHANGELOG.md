@@ -7,6 +7,112 @@ et ce projet adhère à [Semantic Versioning](https://semver.org/lang/fr/).
 
 ---
 
+## [2.2.0] - 2025-10-18
+
+### ✨ Nouvelles fonctionnalités
+
+#### Commande `gittbds` pour mode silencieux simplifié
+
+Ajout d'une nouvelle commande **`gittbds`** (avec "s" pour silent) qui force automatiquement le mode silencieux.
+
+**Avant** :
+```bash
+SILENT_MODE=true gittbd finish
+```
+
+**Maintenant** :
+```bash
+gittbds finish
+```
+
+**Avantages** :
+- ✅ Plus simple et plus court
+- ✅ Fonctionne partout (shell, scripts, CI/CD)
+- ✅ Pas de configuration nécessaire
+- ✅ Installé automatiquement avec `make install`
+
+**Utilisation** :
+```bash
+# Mode normal (verbeux)
+gittbd start feature/test
+
+# Mode silencieux (minimal)
+gittbds start feature/test
+```
+
+Le binaire `gittbds` est un wrapper léger qui exporte `SILENT_MODE=true` avant d'appeler `gittbd`.
+
+---
+
+### 🔧 Améliorations
+
+#### Affichage du help amélioré
+
+- **Version affichée** : La version (2.1.1 puis 2.2.0) est maintenant visible dans `gittbd help`
+- **Couleurs corrigées** : Tous les codes ANSI s'affichent correctement (utilisation de `echo -e`)
+- **Chemin simplifié** : Affichage de `~/.local/share/gittbd/lib/config.sh` au lieu de `bin/../lib/config.sh`
+- **Section Documentation** : Ajout de liens vers README, VERSIONING.md et TUTORIAL.md
+
+#### Installation
+
+- **Makefile** : Installation automatique de `gittbds` en plus de `gittbd`
+- **Permissions** : Ajout de `chmod +x` pour `gittbds` lors de l'installation
+- **Messages** : Affichage de la version silencieuse installée
+
+---
+
+### 🛠️ Corrections
+
+#### Permissions exécutables
+
+- **Fix** : Forcer Git à tracker la permission exécutable avec `git update-index --chmod=+x`
+- **Problème** : Avec `core.fileMode=false`, les permissions n'étaient pas conservées
+- **Solution** : Utilisation de `git update-index` pour forcer le bit exécutable dans l'index Git
+
+---
+
+### 📚 Documentation
+
+#### README.md
+
+Ajout d'une section complète sur le mode silencieux avec :
+- Documentation de la commande `gittbds`
+- Comparaison avec les anciennes méthodes
+- Configuration avancée optionnelle
+- Exemples d'utilisation
+
+---
+
+### 📋 Commits inclus
+
+- feat: add gittbds silent mode command ([49cb3ec](https://github.com/nono-pxbsd/git-tbd/commit/49cb3ec))
+- fix: set executable bit on gittbd binary ([48717aa](https://github.com/nono-pxbsd/git-tbd/commit/48717aa))
+- fix: use echo -e to display print_help ([1abb48c](https://github.com/nono-pxbsd/git-tbd/commit/1abb48c))
+- Merge PR #30: fix/help-style ([7652e29](https://github.com/nono-pxbsd/git-tbd/commit/7652e29))
+- Merge PR #29: doc/patch-2-1-1-installation ([69756a7](https://github.com/nono-pxbsd/git-tbd/commit/69756a7))
+- docs: clarify installation with symlinks workflow ([188e91b](https://github.com/nono-pxbsd/git-tbd/commit/188e91b))
+
+---
+
+### 🎯 Migration
+
+**Aucune action requise** pour les utilisateurs existants.
+
+Après mise à jour (`cd ~/.local/share/gittbd && git pull`), la commande `gittbds` sera automatiquement disponible.
+
+**Pour les nouvelles installations** :
+```bash
+git clone https://github.com/nono-pxbsd/git-tbd.git ~/.local/share/gittbd
+cd ~/.local/share/gittbd
+make install MODE=local
+```
+
+Les deux commandes seront installées :
+- `gittbd` : Mode normal
+- `gittbds` : Mode silencieux
+
+---
+
 ## [2.1.1] - 2025-10-18
 
 ### 📚 Documentation
@@ -323,6 +429,9 @@ Aucun ! La v2.0 est **rétrocompatible** avec v1.x :
 ---
 
 ## Contributeurs
+
+### v2.2.0
+- **nono.pxbsd** : Commande gittbds, amélioration help, fix permissions
 
 ### v2.1.1
 - **nono.pxbsd** : Simplification installation avec workflow symlinks, documentation
