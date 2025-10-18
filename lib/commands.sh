@@ -196,40 +196,57 @@ finish() {
     return 1
   fi
 
-  # Calculer le nombre de commits
-  local commit_count
-  commit_count=$(get_commit_count_between_branches "$DEFAULT_BASE_BRANCH" "$branch")
-
-  # Générer le titre (avec prompt si besoin)
-  local commit_title
-  commit_title=$(generate_commit_title --branch="$branch" --method="$method" --silent="$silent")
-
-  # Générer le body (sans prompt)
-  local commit_body
-  if [[ "$commit_count" -gt 1 ]]; then
-    commit_body=$(generate_commit_description --branch="$branch" --method="$method")
-  fi
-
   local term=$(get_platform_term)
+  local current_branch
+  current_branch=$(git rev-parse --abbrev-ref HEAD 2>/dev/null)
 
-  if [[ "$REQUIRE_PR_ON_FINISH" == true ]] && ! pr_exists "$branch" && [[ "$open_pr" != true ]]; then
-    log_error "$term requise pour finaliser cette branche"
-    log_info "💡 Créez une $term avec : ${BOLD}gittbd pr $branch${RESET}"
-    return 1
-  fi
-
-  # ✅ MODIFICATION : Ajout de --force-sync quand PR existe
+  # === CAS 1 : PR existe déjà ===
   if pr_exists "$branch"; then
-    validate_pr "$branch" ${silent:+--assume-yes} --force-sync || return 1
-  elif [[ "$open_pr" == true ]]; then
-    open_pr "$branch" || return 1
-    validate_pr "$branch" ${silent:+--assume-yes} || return 1
-  else
-    log_success "Finalisation locale sans $term"
-    local merge_mode
-    merge_mode=$(prepare_merge_mode) || return 1
-    finalize_branch_merge --branch="$branch" --merge-mode="$merge_mode" --via-pr=false
+    log_info "📤 Synchronisation de la branche avec la $term..."
+    publish "$branch" --force-sync || return 1
+    
+    local pr_url
+    case "$GIT_PLATFORM" in
+      github)
+        pr_url=$(gh pr view "$branch" --json url -q ".url" 2>/dev/null)
+        ;;
+      gitlab)
+        pr_url=$(glab mr view "$branch" 2>/dev/null | grep -oP 'https://[^\s]+' | head -n1)
+        ;;
+    esac
+    
+    print_message ""
+    log_success "Une $term existe déjà pour cette branche"
+    [[ -n "$pr_url" ]] && print_message "🔗 $pr_url"
+    print_message ""
+    
+    if [[ "$current_branch" == "$branch" ]]; then
+      log_info "💡 Validation : ${BOLD}${CYAN}gittbd v${RESET}"
+    else
+      log_info "💡 Validation : ${BOLD}${CYAN}gittbd v $branch${RESET}"
+    fi
+    return 0
   fi
+
+  # === CAS 2 : Pas de PR, config force PR OU --pr explicite ===
+  if [[ "$REQUIRE_PR_ON_FINISH" == true ]] || [[ "$open_pr" == true ]]; then
+    open_pr "$branch" || return 1
+    
+    print_message ""
+    
+    if [[ "$current_branch" == "$branch" ]]; then
+      log_info "💡 Validation : ${BOLD}${CYAN}gittbd v${RESET}"
+    else
+      log_info "💡 Validation : ${BOLD}${CYAN}gittbd v $branch${RESET}"
+    fi
+    return 0
+  fi
+
+  # === CAS 3 : Pas de PR, config permet merge local ===
+  log_success "Finalisation locale sans $term"
+  local merge_mode
+  merge_mode=$(prepare_merge_mode) || return 1
+  finalize_branch_merge --branch="$branch" --merge-mode="$merge_mode" --via-pr=false
 }
 
 # ====================================
