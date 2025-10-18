@@ -62,15 +62,10 @@ install: check-deps
 	fi
 	@chmod +x $(BIN_SOURCE)
 	@if [ "$(MODE)" = "local" ]; then \
-		echo "📦 Installation en mode local (~/.local/share/gittbd)"; \
-		mkdir -p $(INSTALL_DIR_LOCAL)/bin; \
-		mkdir -p $(INSTALL_DIR_LOCAL)/lib; \
+		echo "📦 Installation en mode local"; \
 		mkdir -p $(INSTALL_BIN_LOCAL); \
-		cp $(BIN_SOURCE) $(INSTALL_DIR_LOCAL)/bin/$(BINARY_NAME); \
-		cp -r $(LIB_SOURCE)/* $(INSTALL_DIR_LOCAL)/lib/; \
-		chmod +x $(INSTALL_DIR_LOCAL)/bin/$(BINARY_NAME); \
-		ln -sf $(INSTALL_DIR_LOCAL)/bin/$(BINARY_NAME) $(INSTALL_BIN_LOCAL)/$(BINARY_NAME); \
-		ln -sf $(INSTALL_DIR_LOCAL)/bin/$(BINARY_NAME) $(INSTALL_BIN_LOCAL)/git-tbd; \
+		ln -sf $(BIN_SOURCE) $(INSTALL_BIN_LOCAL)/$(BINARY_NAME); \
+		ln -sf $(BIN_SOURCE) $(INSTALL_BIN_LOCAL)/git-tbd; \
 		if [ -n "$$ZSH_VERSION" ]; then shellrc="$$HOME/.zshrc"; \
 		elif [ -n "$$BASH_VERSION" ]; then shellrc="$$HOME/.bashrc"; \
 		else shellrc="$$HOME/.profile"; fi; \
@@ -80,22 +75,17 @@ install: check-deps
 		else \
 			echo "ℹ️  PATH local déjà présent dans $$shellrc"; \
 		fi; \
-		echo "✅ Installé localement : $(INSTALL_DIR_LOCAL)"; \
-		echo "🔗 Binaires : $(INSTALL_BIN_LOCAL)/gittbd et git-tbd"; \
+		echo "✅ Installé localement : $(INSTALL_BIN_LOCAL)/$(BINARY_NAME)"; \
+		echo "🔗 Alias de compatibilité : $(INSTALL_BIN_LOCAL)/git-tbd"; \
 		echo ""; \
 		echo "💡 Pour configurer le mode silencieux :"; \
 		echo "   bash bin/setup-silent-mode.sh"; \
 	else \
-		echo "🛠️  Installation en mode global (/usr/local/share/gittbd)"; \
-		sudo mkdir -p $(INSTALL_DIR_GLOBAL)/bin; \
-		sudo mkdir -p $(INSTALL_DIR_GLOBAL)/lib; \
-		sudo cp $(BIN_SOURCE) $(INSTALL_DIR_GLOBAL)/bin/$(BINARY_NAME); \
-		sudo cp -r $(LIB_SOURCE)/* $(INSTALL_DIR_GLOBAL)/lib/; \
-		sudo chmod +x $(INSTALL_DIR_GLOBAL)/bin/$(BINARY_NAME); \
-		sudo ln -sf $(INSTALL_DIR_GLOBAL)/bin/$(BINARY_NAME) $(INSTALL_BIN_GLOBAL)/$(BINARY_NAME); \
-		sudo ln -sf $(INSTALL_DIR_GLOBAL)/bin/$(BINARY_NAME) $(INSTALL_BIN_GLOBAL)/git-tbd; \
-		echo "✅ Installé globalement : $(INSTALL_DIR_GLOBAL)"; \
-		echo "🔗 Binaires : $(INSTALL_BIN_GLOBAL)/gittbd et git-tbd"; \
+		echo "🛠️  Installation en mode global"; \
+		sudo ln -sf $(BIN_SOURCE) $(INSTALL_BIN_GLOBAL)/$(BINARY_NAME); \
+		sudo ln -sf $(BIN_SOURCE) $(INSTALL_BIN_GLOBAL)/git-tbd; \
+		echo "✅ Installé globalement : $(INSTALL_BIN_GLOBAL)/$(BINARY_NAME)"; \
+		echo "🔗 Alias de compatibilité : $(INSTALL_BIN_GLOBAL)/git-tbd"; \
 		echo ""; \
 		echo "💡 Pour configurer le mode silencieux :"; \
 		echo "   bash bin/setup-silent-mode.sh"; \
@@ -103,18 +93,9 @@ install: check-deps
 
 # Désinstallation
 uninstall:
-	@if [ -d "$(INSTALL_DIR_LOCAL)" ]; then \
-		rm -rf $(INSTALL_DIR_LOCAL); \
-		rm -f $(INSTALL_BIN_LOCAL)/$(BINARY_NAME); \
-		rm -f $(INSTALL_BIN_LOCAL)/git-tbd; \
-		echo "✅ Installation locale supprimée"; \
-	fi
-	@if [ -d "$(INSTALL_DIR_GLOBAL)" ]; then \
-		sudo rm -rf $(INSTALL_DIR_GLOBAL); \
-		sudo rm -f $(INSTALL_BIN_GLOBAL)/$(BINARY_NAME); \
-		sudo rm -f $(INSTALL_BIN_GLOBAL)/git-tbd; \
-		echo "✅ Installation globale supprimée"; \
-	fi
+	@rm -f $(INSTALL_BIN_LOCAL)/$(BINARY_NAME) $(INSTALL_BIN_LOCAL)/git-tbd
+	@sudo rm -f $(INSTALL_BIN_GLOBAL)/$(BINARY_NAME) $(INSTALL_BIN_GLOBAL)/git-tbd 2>/dev/null || true
+	@echo "✅ Symlinks supprimés"
 
 # Publication d'un tag Git
 release:
