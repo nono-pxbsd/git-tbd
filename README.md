@@ -67,37 +67,90 @@ sudo dnf install fzf
 
 ## ⚙️ Installation
 
-### 📦 Méthode recommandée (via `make`)
+### 📍 Méthode recommandée (clone + symlinks)
+
+Cette méthode permet de **mettre à jour facilement** via `git pull` sans réinstaller.
 
 ```bash
-# Cloner le projet
-git clone https://github.com/votre-user/gittbd.git
-cd gittbd
+# 1. Cloner le repo dans ~/.local/share/gittbd/ (AVEC .git/)
+git clone https://github.com/nono-pxbsd/git-tbd.git ~/.local/share/gittbd
 
-# Installation locale (recommandé)
+# 2. Installer (crée des symlinks vers le repo)
+cd ~/.local/share/gittbd
 make install MODE=local
 
-# OU installation globale (nécessite sudo)
-make install MODE=global
-
-# Recharger le shell
+# 3. Recharger le shell
 source ~/.zshrc  # ou ~/.bashrc
 ```
 
 **Ce qui est installé** :
 - ✅ Vérifie automatiquement les dépendances (git, gh/glab, fzf)
-- ✅ Installe le binaire `gittbd`
+- ✅ Crée des **symlinks** dans `~/.local/bin/` vers le repo cloné
 - ✅ Crée un alias `git-tbd` pour rétrocompatibilité
 - ✅ Ajoute `~/.local/bin` au `$PATH` si nécessaire
 
+**Avantages de cette méthode** :
+- 🔄 **Mises à jour faciles** : `cd ~/.local/share/gittbd && git pull`
+- 🔗 Les symlinks pointent toujours vers la dernière version
+- 📦 Pas besoin de réinstaller après chaque mise à jour
+- 🎯 Le repo contient `.git/` pour les futures mises à jour
+
 ---
 
-## 🔇 Mode Silencieux
+### 🔄 Mettre à jour gittbd
+
+Une fois installé via la méthode recommandée :
+
+```bash
+# Se placer dans le répertoire d'installation
+cd ~/.local/share/gittbd
+
+# Récupérer les dernières modifications
+git pull
+
+# C'est tout ! Les symlinks pointent vers les nouveaux fichiers
+# Pas besoin de make install à nouveau
+```
+
+**Vérifier la version installée** :
+```bash
+gittbd help
+# Affiche la version et les commandes disponibles
+```
+
+---
+
+### 🛠️ Installation globale (optionnel)
+
+Pour une installation système (accessible par tous les utilisateurs) :
+
+```bash
+cd ~/.local/share/gittbd
+sudo make install MODE=global
+```
+
+Les binaires seront installés dans `/usr/local/bin/`.
+
+---
+
+### 🗑️ Désinstallation
+
+```bash
+cd ~/.local/share/gittbd
+make uninstall
+
+# Pour supprimer complètement le repo
+rm -rf ~/.local/share/gittbd
+```
+
+---
+
+## 📇 Mode Silencieux
 
 Pour réduire la verbosité, exécutez après l'installation :
 
 ```bash
-bash bin/setup-silent-mode.sh
+bash ~/.local/share/gittbd/bin/setup-silent-mode.sh
 ```
 
 Le script détectera automatiquement votre environnement (shell, système) et vous proposera plusieurs options :
@@ -282,7 +335,7 @@ SILENT_DIVERGED_FALLBACK="force-push"  # En CI/CD, assume amend
 # En local (développement)
 gittbd publish --force
 
-# ⚠️  Branche divergée détectée
+# ⚠️ Branche divergée détectée
 # 
 # Quelle stratégie utiliser ?
 # 
@@ -327,7 +380,7 @@ SILENT_DIVERGED_FALLBACK="force-sync"  # En CI/CD, préfère intégrer
 # En local
 gittbd publish --force
 
-# ⚠️  Branche divergée détectée
+# ⚠️ Branche divergée détectée
 # 
 # Quelle stratégie utiliser ?
 # 
@@ -551,7 +604,7 @@ gittbd b patch
 
 ---
 
-## 🔇 Mode Silencieux détaillé
+## 📇 Mode Silencieux détaillé
 
 Réduit la verbosité en n'affichant que les erreurs et succès finaux.
 
@@ -565,7 +618,7 @@ SILENT_MODE=true gittbd finish
 export SILENT_MODE=true
 
 # Permanent (shell) - voir section installation ci-dessus
-bash bin/setup-silent-mode.sh
+bash ~/.local/share/gittbd/bin/setup-silent-mode.sh
 ```
 
 ### Fonctions impactées
@@ -677,7 +730,7 @@ gittbd bump minor
 
 ## 🛠️ Configuration
 
-Fichier : `lib/config.sh`
+Fichier : `~/.local/share/gittbd/lib/config.sh`
 
 ```bash
 # Branche principale
@@ -707,16 +760,6 @@ SILENT_DIVERGED_FALLBACK="force-push"
 - ✅ **Linux** (testé sous Ubuntu / Debian / WSL)
 - ⚠️ **macOS** : Non testé, devrait fonctionner
 - ❌ **Windows** : Utiliser WSL
-
----
-
-## ❌ Désinstallation
-
-```bash
-make uninstall
-```
-
-Supprime les binaires installés (local et global).
 
 ---
 
