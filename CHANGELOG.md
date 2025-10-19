@@ -7,6 +7,65 @@ et ce projet adhère à [Semantic Versioning](https://semver.org/lang/fr/).
 
 ---
 
+## [3.2.1] - 2025-01-20
+
+### 🐛 Corrections
+
+- **ShellCheck** : Correction des warnings SC2155 et SC2207 (PR #38)
+  - Déclaration et assignation séparées pour éviter de masquer les codes retour
+  - Utilisation de `mapfile` pour remplir les arrays
+- **CI/CD** : Éviter la duplication des workflows GitHub Actions
+
+---
+
+## [3.2.0] - 2025-01-20
+
+### 🧪 Suite de tests complète
+
+#### ✨ Ajouts
+
+##### Structure des tests
+
+- **`tests/unit/`** : Tests unitaires des modules core
+  - `test_logging.sh` : Tests du système de logs (12 tests)
+  - `test_validation.sh` : Tests des validations (10 tests)
+  - `test_git_wrapper.sh` : Tests des wrappers Git (5 tests)
+
+- **`tests/integration/`** : Tests d'intégration avec Git
+  - `test_branches.sh` : Tests de gestion des branches (4 tests)
+  - `test_sync.sh` : Tests de synchronisation (4 tests)
+  - `test_v3_workflow.sh` : Tests du workflow complet (12 tests)
+
+- **`tests/regression/`** : Tests de non-régression
+  - `test_loader.sh` : Vérification du chargement des modules
+  - `test_prompts.sh` : Tests des fonctions existantes
+
+- **`tests/run_tests.sh`** : Runner central pour exécuter tous les tests
+  - Options : `--unit-only`, `--integration-only`, `--regression-only`, `--verbose`
+
+##### CI/CD GitHub Actions
+
+- **`.github/workflows/tests.yml`** : Pipeline automatisé
+  - Job `lint` : Vérification ShellCheck de tous les fichiers
+  - Job `tests` : Exécution de la suite de tests complète
+  - Déclenchement sur push vers `main` et pull requests
+
+#### 🔧 Améliorations
+
+- **Total : 47+ tests automatisés** couvrant toutes les fonctions critiques
+- **Détection des régressions** lors des modifications
+- **Validation automatique** via GitHub Actions sur chaque PR
+
+#### 📚 Documentation
+
+- Ajout de la documentation des tests dans le code
+- Guide d'utilisation du runner de tests
+
+#### Référence
+- Implémentation via PR #37 : "test: suite de tests complète + CI/CD"
+
+---
+
 ## [3.1.0] - 2025-01-XX
 
 ### 🏗️ Refactorisation majeure : Architecture modulaire
