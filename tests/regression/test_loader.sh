@@ -10,7 +10,7 @@ CYAN="\033[0;36m"
 RESET="\033[0m"
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
+PROJECT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
 
 echo -e "${CYAN}🧪 Test du loader${RESET}"
 echo "=============================="
