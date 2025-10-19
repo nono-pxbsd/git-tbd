@@ -316,17 +316,14 @@ publish() {
       case "$status" in
         ahead)
           log_info "📊 Branche en avance → push standard"
-          # Pas besoin de force_push, Git gère
           ;;
         behind)
           log_info "📊 Branche en retard → activation de --force-sync"
           force_sync=true
           ;;
         diverged)
-          # Utiliser la stratégie configurée
           local strategy="$DEFAULT_DIVERGED_STRATEGY"
           
-          # En mode silencieux, utiliser le fallback si strategy = ask
           if [[ "$SILENT_MODE" == true && "$strategy" == "ask" ]]; then
             strategy="$SILENT_DIVERGED_FALLBACK"
             log_debug "Mode silencieux : utilisation du fallback $strategy"
@@ -334,17 +331,17 @@ publish() {
           
           case "$strategy" in
             force-push)
-              log_warn "⚠️  Branche divergée → activation de --force-push"
+              log_warn "⚠️ Branche divergée → activation de --force-push"
               log_info "💡 Stratégie : force push (local écrase origin)"
               force_push=true
               ;;
             force-sync)
-              log_warn "⚠️  Branche divergée → activation de --force-sync"
+              log_warn "⚠️ Branche divergée → activation de --force-sync"
               log_info "💡 Stratégie : sync (rebase) puis push"
               force_sync=true
               ;;
             ask)
-              log_warn "⚠️  Branche divergée détectée"
+              log_warn "⚠️ Branche divergée détectée"
               print_message ""
               log_info "${BOLD}Quelle stratégie utiliser ?${RESET}"
               print_message ""
@@ -405,7 +402,7 @@ publish() {
           ;;
         diverged)
           if [[ "$force_sync" == true ]]; then
-            log_warn "⚠️  Divergence détectée : tentative de synchronisation..."
+            log_warn "⚠️ Divergence détectée : tentative de synchronisation..."
             sync_branch_to_remote --force "$branch" || return 1
           else
             log_error "La branche '$branch' a divergé d'origin/$branch"
@@ -452,11 +449,11 @@ publish() {
 }
 
 # ====================================
-# Commande open_pr
+# Commande open_request
 # ====================================
 
-open_pr() {
-  log_debug "open_pr() called with arguments: $*"
+open_request() {
+  log_debug "open_request() called with arguments: $*"
 
   local branch_input="$1"
   local branch_type="" branch_name=""
@@ -467,16 +464,90 @@ open_pr() {
   fi
 
   local branch="${branch_type}/${branch_name}"
-  local icon="$(get_branch_icon "$branch_type")"
-  local title="${icon}${branch_name}"
-  local body="${2:-Pull request automatique depuis \`$branch\` vers \`${DEFAULT_BASE_BRANCH}\`}"
   local term=$(get_platform_term)
 
   log_info "📤 Publication de la branche avant création de la $term..."
   publish "$branch" || return 1
 
+  # 🆕 Construction du titre depuis les commits
+  local title
+  local commit_count
+  commit_count=$(get_commit_count_between_branches_raw "$DEFAULT_BASE_BRANCH" "$branch")
+  
+  log_debug "Nombre de commits : $commit_count"
+  
+  if [[ "$commit_count" -eq 1 ]]; then
+    # 1 seul commit : utiliser son message
+    title=$(git log -1 --pretty=%s "$branch")
+    log_debug "1 commit détecté, titre : $title"
+  else
+    # Plusieurs commits
+    if [[ "$SILENT_MODE" != true ]]; then
+      log_info "💬 ${BOLD}Titre de la $term${RESET}"
+      local first_commit
+      first_commit=$(git log --reverse --pretty=%s "$branch" "^$DEFAULT_BASE_BRANCH" | head -n1)
+      print_message "  • Premier commit : $first_commit"
+      print_message "  • Nombre de commits : $commit_count"
+      print_message ""
+      read -r -p "Titre (vide = premier commit) : " title < /dev/tty
+      
+      [[ -z "$title" ]] && title="$first_commit"
+    else
+      # Mode silencieux : prendre le premier commit
+      title=$(git log --reverse --pretty=%s "$branch" "^$DEFAULT_BASE_BRANCH" | head -n1)
+    fi
+    
+    log_debug "Titre choisi : $title"
+  fi
+  
+  # Ajouter l'icône si pas déjà présente
+  local icon=$(get_branch_icon "$branch_type")
+  if [[ ! "$title" =~ ^$icon ]]; then
+    title="$icon $title"
+    log_debug "Icône ajoutée : $title"
+  fi
+  
+  # 🆕 Construire le body (liste des commits)
+  local body
+  body=$(git log --pretty=format:"- %s" "$branch" "^$DEFAULT_BASE_BRANCH")
+  log_debug "Body généré avec $commit_count commits"
+  
+  # Ajouter (PR/MR) temporairement
+  title="$title ($term)"
+
   log_info "🔧 Création de la $term via $GIT_PLATFORM..."
+  log_debug "Titre temporaire : $title"
+  
   git_platform_cmd pr-create --base "$DEFAULT_BASE_BRANCH" --head "$branch" --title "$title" --body "$body" || return 1
+
+  # 🆕 Récupérer le numéro et modifier le titre
+  local pr_number
+  case "$GIT_PLATFORM" in
+    github)
+      pr_number=$(gh pr view "$branch" --json number -q ".number" 2>/dev/null)
+      ;;
+    gitlab)
+      pr_number=$(glab mr view "$branch" 2>/dev/null | grep -oP '!\K\d+' | head -n1)
+      ;;
+  esac
+  
+  if [[ -n "$pr_number" ]]; then
+    # Enlever (PR) et ajouter (PR #XX)
+    local final_title="${title% (*)} ($term #$pr_number)"
+    
+    log_debug "Modification du titre : $final_title"
+    
+    case "$GIT_PLATFORM" in
+      github)
+        gh pr edit "$branch" --title "$final_title" 2>/dev/null
+        ;;
+      gitlab)
+        glab mr update "$pr_number" --title "$final_title" 2>/dev/null
+        ;;
+    esac
+    
+    log_success "$term #$pr_number créée avec le titre : $final_title"
+  fi
 
   local url
   case "$GIT_PLATFORM" in
@@ -484,7 +555,7 @@ open_pr() {
       url=$(gh pr view "$branch" --json url -q ".url" 2>/dev/null)
       ;;
     gitlab)
-      url=$(glab mr view "$branch" 2>/dev/null | grep -oP 'https://[^\s]+')
+      url=$(glab mr view "$branch" 2>/dev/null | grep -oP 'https://[^\s]+' | head -n1)
       ;;
   esac
 
