@@ -14,15 +14,15 @@ open_request() {
     return 1
   fi
 
-  local branch="${branch_type}/${branch_name}"
-  local term=$(get_platform_term)
+  local branch term
+  branch="${branch_type}/${branch_name}"
+  term=$(get_platform_term)
 
   log_info "📤 Publication de la branche avant création de la $term..."
   publish "$branch" || return 1
 
   # v3 : Construction du titre depuis les commits
-  local title
-  local commit_count
+  local title commit_count
   commit_count=$(get_commit_count_between_branches_raw "$DEFAULT_BASE_BRANCH" "$branch")
   
   log_debug "Nombre de commits : $commit_count"
@@ -49,7 +49,8 @@ open_request() {
   fi
   
   # Ajouter l'icône si pas déjà présente
-  local icon=$(get_branch_icon "$branch_type")
+  local icon
+  icon=$(get_branch_icon "$branch_type")
   if [[ ! "$title" =~ ^$icon ]]; then
     title="$icon $title"
     log_debug "Icône ajoutée : $title"
