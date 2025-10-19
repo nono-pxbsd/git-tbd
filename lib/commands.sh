@@ -564,14 +564,13 @@ open_request() {
 }
 
 # ====================================
-# Commande validate_pr
+# Commande validate_request
 # ====================================
 
-validate_pr() {
-  log_debug "validate_pr() called with arguments: $*"
+validate_request() {
+  log_debug "validate_request() called with arguments: $*"
 
   local branch=""
-  local merge_mode="squash"
   local assume_yes=false
   local force_sync=false
 
@@ -581,7 +580,6 @@ validate_pr() {
   local args=()
   for arg in "$@"; do
     case "$arg" in
-      --merge-mode=*) merge_mode="${arg#*=}" ;;
       -y|--assume-yes) assume_yes=true ;;
       --force-sync) force_sync=true ;;
       -*) ;;
@@ -598,7 +596,7 @@ validate_pr() {
   local term=$(get_platform_term)
   local term_long=$(get_platform_term_long)
 
-  log_info "📝 Validation de la $term sur branche : ${CYAN}$branch${RESET}"
+  log_info "🔍 Validation de la $term sur branche : ${CYAN}$branch${RESET}"
 
   # === PHASE 1 : Vérifications préalables ===
   if ! local_branch_exists "$branch"; then
@@ -612,14 +610,14 @@ validate_pr() {
     return 1
   fi
 
-  # === PHASE 2 : Synchronisation (attente explicite) ===
+  # === PHASE 2 : Synchronisation ===
   log_info "🔄 Synchronisation avec le remote..."
   git_safe fetch origin "$branch" || {
     log_error "Échec de la synchronisation avec origin/$branch"
     return 1
   }
 
-  # === PHASE 3 : Vérification de la PR/MR ===
+  # === PHASE 3 : Vérification de la Request ===
   log_info "🔍 Vérification de l'existence d'une $term..."
   
   local pr_number
@@ -631,7 +629,7 @@ validate_pr() {
     return 1
   fi
   
-  log_success "$term trouvée"
+  log_success "$term #$pr_number trouvée"
 
   # === PHASE 4 : Vérification de la synchro ===
   local status
@@ -640,8 +638,6 @@ validate_pr() {
   if [[ "$status" != "synced" ]]; then
     log_warn "Branche '$branch' non synchronisée (statut: $status)"
     
-    # Si la branche est en avance (ahead), c'est probablement après un squash local
-    # Il faut forcer le push au lieu de rebase
     if [[ "$status" == "ahead" ]]; then
       log_info "📤 La branche est en avance (probablement après squash local)"
       log_info "🔧 Force push en cours..."
@@ -656,9 +652,37 @@ validate_pr() {
     fi
   fi
 
-  # === PHASE 5 : Affichage du résumé (APRÈS toutes les I/O) ===
+  # === PHASE 5 : Récupération des infos Request ===
+  log_info "📋 Récupération des informations de la $term..."
+  
+  local pr_title pr_body
+  
+  case "$GIT_PLATFORM" in
+    github)
+      pr_title=$(gh pr view "$branch" --json title -q ".title" 2>/dev/null)
+      ;;
+    gitlab)
+      pr_title=$(glab mr view "$branch" 2>/dev/null | grep -oP 'title: \K.*')
+      ;;
+  esac
+  
+  if [[ -z "$pr_title" ]]; then
+    log_error "Impossible de récupérer le titre de la $term"
+    return 1
+  fi
+  
+  # Construire le body (liste des commits)
+  pr_body=$(git log --pretty=format:"- %s" "$branch" "^$DEFAULT_BASE_BRANCH")
+  
+  log_debug "Titre PR : $pr_title"
+  log_debug "Body PR : $pr_body"
+
+  # === PHASE 6 : Affichage du résumé ===
   print_message ""
   log_info "📋 ${BOLD}Résumé de la $term${RESET}"
+  print_message ""
+  print_message "  Titre : ${CYAN}$pr_title${RESET}"
+  print_message "  Branche : ${CYAN}$branch${RESET} → ${CYAN}${DEFAULT_BASE_BRANCH}${RESET}"
   print_message ""
   
   git_platform_cmd pr-view "$branch" 2>/dev/null || {
@@ -667,7 +691,7 @@ validate_pr() {
   
   print_message ""
 
-  # === PHASE 6 : Confirmation utilisateur ===
+  # === PHASE 7 : Confirmation utilisateur ===
   local confirm="n"
   
   if [[ "$assume_yes" == true ]]; then
@@ -682,23 +706,78 @@ validate_pr() {
     return 1
   fi
 
-  # === PHASE 7 : Préparation du merge ===
-  log_info "🔧 Préparation du merge..."
+  # === PHASE 8 : Squash merge local ===
+  log_info "🔄 Basculement sur $DEFAULT_BASE_BRANCH..."
+  git_safe checkout "$DEFAULT_BASE_BRANCH" || return 1
   
-  local final_merge_mode
-  final_merge_mode=$(prepare_merge_mode "$branch") || return 1
+  log_info "⬇️ Mise à jour de $DEFAULT_BASE_BRANCH..."
+  git_safe pull || return 1
+  
+  log_info "🔀 Squash merge de $branch..."
+  git_safe merge --squash "$branch" || {
+    log_error "Échec du squash merge"
+    log_info "💡 Résolvez les conflits puis committez manuellement"
+    return 1
+  }
+  
+  # Construire le message final
+  local final_message="$pr_title
 
-  log_debug "final_merge_mode reçu de prepare_merge_mode: '$final_merge_mode'"
+$pr_body"
+  
+  log_info "💬 Création du commit de merge..."
+  git_safe commit -m "$final_message" || {
+    log_error "Échec du commit"
+    return 1
+  }
+  
+  log_info "📤 Push vers $DEFAULT_BASE_BRANCH..."
+  git_safe push origin "$DEFAULT_BASE_BRANCH" || {
+    log_error "Échec du push"
+    return 1
+  }
+  
+  log_success "Merge effectué dans $DEFAULT_BASE_BRANCH"
 
-  # === PHASE 8 : Exécution finale ===
-  finalize_branch_merge \
-    --branch="$branch" \
-    --merge-mode="$final_merge_mode" \
-    --via-pr=true
+  # === PHASE 9 : Fermeture de la Request ===
+  log_info "🔒 Fermeture de la $term #$pr_number..."
+  
+  case "$GIT_PLATFORM" in
+    github)
+      gh pr close "$branch" --comment "Merged via gittbd validate" 2>/dev/null || {
+        log_warn "Impossible de fermer la PR automatiquement"
+      }
+      ;;
+    gitlab)
+      glab mr close "$pr_number" --comment "Merged via gittbd validate" 2>/dev/null || {
+        log_warn "Impossible de fermer la MR automatiquement"
+      }
+      ;;
+  esac
+
+  # === PHASE 10 : Nettoyage des branches ===
+  log_info "🧹 Nettoyage des branches..."
+  
+  # Supprimer la branche distante
+  if remote_branch_exists "$branch"; then
+    delete_remote_branch "$branch"
+  fi
+  
+  # Supprimer la branche locale
+  if git show-ref --verify --quiet "refs/heads/$branch"; then
+    git branch -d "$branch" 2>/dev/null || {
+      log_warn "Impossible de supprimer la branche locale avec -d, utilisation de -D..."
+      git branch -D "$branch"
+    }
+    log_success "Branche locale $branch supprimée"
+  fi
+  
+  print_message ""
+  log_success "🎉 $term #$pr_number validée et mergée avec succès !"
 }
 
 # ====================================
-# Gestion de versions (bump)
+# Gestion de versions (bump) - Inchangé
 # ====================================
 
 get_latest_version() {
@@ -859,7 +938,7 @@ bump() {
     fi
   fi
   
-  log_info "🏷️  Création du tag v${new_version}..."
+  log_info "🏷️ Création du tag v${new_version}..."
   
   local tag_message
   tag_message="Release v${new_version}
@@ -909,7 +988,7 @@ ${changelog}"
       return 1
     fi
   else
-    log_info "ℹ️  Tag créé localement uniquement (--no-push activé)"
+    log_info "ℹ️ Tag créé localement uniquement (--no-push activé)"
     log_info "💡 Pour le pusher plus tard :"
     log_info "   git push origin v${new_version}"
   fi
