@@ -51,8 +51,8 @@ finish() {
     return 1
   fi
 
-  local term=$(get_platform_term)
-  local current_branch
+  local current_branch term
+  term=$(get_platform_term)
   current_branch=$(git rev-parse --abbrev-ref HEAD 2>/dev/null)
 
   # CAS 1 : Request existe déjà

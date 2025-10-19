@@ -29,8 +29,9 @@ validate_request() {
     branch="$current_branch"
   fi
 
-  local term=$(get_platform_term)
-  local term_long=$(get_platform_term_long)
+  local term term_long
+  term=$(get_platform_term)
+  term_long=$(get_platform_term_long)
 
   log_info "🔍 Validation de la $term sur branche : ${CYAN}$branch${RESET}"
 

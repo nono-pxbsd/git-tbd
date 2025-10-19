@@ -2,7 +2,7 @@ name: Tests & Lint
 
 on:
   push:
-    branches: [ main, feature/*, refactor/*, fix/* ]
+    branches: [ main ]
   pull_request:
     branches: [ main ]
 
