@@ -1,6 +1,6 @@
 #!/bin/bash
 # gittbd : CLI pour workflow Trunk-Based Development 🚀
-# Version : 2.0.0
+# Version : 3.0.0
 # Auteur : nono.pxbsd
 # Licence : MIT
 
@@ -37,7 +37,7 @@ source "${LIB_DIR}/commands.sh"
 # Fonction d'aide
 print_help() {
   echo -e "${BOLD}gittbd${RESET} - CLI pour workflow Trunk-Based Development"
-  echo -e "${BOLD}Version :${RESET} 2.1.1\n"
+  echo -e "${BOLD}Version :${RESET} 3.0.0\n"
   
   echo -e "${BOLD}Usage :${RESET}"
   echo -e "  ${CYAN}gittbd start [type/name]${RESET}      → Crée une nouvelle branche (alias: s)"
@@ -46,6 +46,7 @@ print_help() {
   echo -e "  ${CYAN}gittbd pr [branch]${RESET}            → Ouvre une Pull Request"
   echo -e "  ${CYAN}gittbd mr [branch]${RESET}            → Alias de 'pr' (pour GitLab)"
   echo -e "  ${CYAN}gittbd validate [branch]${RESET}      → Valide une PR/MR (alias: v, merge)"
+  echo -e "  ${CYAN}gittbd cleanup [branch]${RESET}       → Nettoie après merge GitHub (alias: clean, c)"
   echo -e "  ${CYAN}gittbd sync [branch]${RESET}          → Synchronise avec origin"
   echo -e "  ${CYAN}gittbd bump <type>${RESET}            → Crée un tag de version (major/minor/patch)"
   echo -e "  ${CYAN}gittbd help${RESET}                   → Affiche cette aide\n"
@@ -59,8 +60,9 @@ print_help() {
   echo -e "  gittbd start feature/login-form"
   echo -e "  gittbd s                          ${GREEN}# Mode interactif${RESET}"
   echo -e "  gittbd f --pr                     ${GREEN}# Finish avec PR${RESET}"
-  echo -e "  gittbd bump patch"
-  echo -e "  SILENT_MODE=true gittbd validate --assume-yes\n"
+  echo -e "  gittbd validate                   ${GREEN}# Valide la PR${RESET}"
+  echo -e "  gittbd cleanup feature/login      ${GREEN}# Après merge GitHub${RESET}"
+  echo -e "  gittbd bump patch\n"
   
   echo -e "${BOLD}Configuration :${RESET}"
   echo -e "  Fichier : ${CYAN}~/.local/share/gittbd/lib/config.sh${RESET}"
@@ -68,6 +70,7 @@ print_help() {
   
   echo -e "${BOLD}Documentation :${RESET}"
   echo -e "  README      : ${CYAN}https://github.com/nono-pxbsd/git-tbd${RESET}"
+  echo -e "  Migration   : ${CYAN}~/.local/share/gittbd/docs/MIGRATION_v3.md${RESET}"
   echo -e "  Versioning  : ${CYAN}~/.local/share/gittbd/docs/VERSIONING.md${RESET}"
   echo -e "  Tutorial    : ${CYAN}~/.local/share/gittbd/docs/TUTORIAL.md${RESET}"
 }
@@ -88,11 +91,15 @@ case "${1:-help}" in
     ;;
   pr|mr)
     shift
-    open_pr "$@"
+    open_request "$@"
     ;;
   validate|v|merge)
     shift
-    validate_pr "$@"
+    validate_request "$@"
+    ;;
+  cleanup|clean|c)
+    shift
+    cleanup "$@"
     ;;
   sync)
     shift
