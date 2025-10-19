@@ -1,6 +1,6 @@
 #!/bin/bash
 # gittbd : CLI pour workflow Trunk-Based Development 🚀
-# Version : 3.0.0
+# Version : 3.1.0
 # Auteur : nono.pxbsd
 # Licence : MIT
 
@@ -17,27 +17,19 @@ RESET="\e[0m"
 SCRIPT_PATH="$(readlink -f "$0")"
 SCRIPT_DIR="$(dirname "$SCRIPT_PATH")"
 
-# Chargement des bibliothèques
-if [[ -f "${SCRIPT_DIR}/../lib/config.sh" ]]; then
-  LIB_DIR="${SCRIPT_DIR}/../lib"
+# Chargement via le loader
+if [[ -f "${SCRIPT_DIR}/../lib/loader.sh" ]]; then
+  # shellcheck source=../lib/loader.sh
+  source "${SCRIPT_DIR}/../lib/loader.sh"
 else
   echo "❌ Impossible de trouver les bibliothèques. Réinstallez gittbd."
   exit 1
 fi
 
-# shellcheck source=lib/config.sh
-source "${LIB_DIR}/config.sh"
-# shellcheck source=lib/utils.sh
-source "${LIB_DIR}/utils.sh"
-# shellcheck source=lib/branches.sh
-source "${LIB_DIR}/branches.sh"
-# shellcheck source=lib/commands.sh
-source "${LIB_DIR}/commands.sh"
-
 # Fonction d'aide
 print_help() {
   echo -e "${BOLD}gittbd${RESET} - CLI pour workflow Trunk-Based Development"
-  echo -e "${BOLD}Version :${RESET} 3.0.0\n"
+  echo -e "${BOLD}Version :${RESET} 3.1.0\n"
   
   echo -e "${BOLD}Usage :${RESET}"
   echo -e "  ${CYAN}gittbd start [type/name]${RESET}      → Crée une nouvelle branche (alias: s)"

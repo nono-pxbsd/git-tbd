@@ -56,6 +56,14 @@ sudo dnf install fzf
 
 ## ✨ Fonctionnalités
 
+### 🆕 Nouveautés v3.1.0
+
+- 🏗️ **Architecture modulaire** : Code découpé en modules logiques
+- 📦 **17 fichiers** au lieu de 3 gros fichiers (50-150 lignes/fichier)
+- 🧪 **Tests améliorés** : Tests du loader + tests de non-régression
+- 🔧 **Maintenabilité** : Plus facile à débugger et à faire évoluer
+- ✅ **Rétrocompatible** : Aucun changement pour l'utilisateur
+
 ### 🆕 Nouveautés v3.0.0
 
 - 🎯 **Squash au bon moment** : Plus de squash avant la PR, uniquement au merge
@@ -143,6 +151,41 @@ sudo make install MODE=global
 ```
 
 Les binaires seront installés dans `/usr/local/bin/`.
+
+---
+
+### 📁 Architecture des fichiers
+
+Depuis la v3.1.0, gittbd utilise une architecture modulaire :
+```
+lib/
+├── config.sh                   # Configuration
+├── loader.sh                   # Charge tous les modules
+├── core/                       # Fonctions de base
+│   ├── logging.sh              # Système de logs
+│   ├── git_wrapper.sh          # Wrapper Git sécurisé
+│   └── validation.sh           # Validations
+├── domain/                     # Logique métier Git
+│   ├── branches.sh             # Gestion branches
+│   ├── commits.sh              # Gestion commits
+│   ├── sync.sh                 # Synchronisation
+│   └── requests.sh             # PR/MR
+└── commands/                   # Commandes CLI
+    ├── start.sh
+    ├── finish.sh
+    ├── publish.sh
+    ├── open_request.sh
+    ├── validate_request.sh
+    ├── cleanup.sh
+    ├── sync.sh
+    └── bump.sh
+```
+
+**Avantages** :
+- ✅ Fichiers légers (50-150 lignes)
+- ✅ Responsabilités claires
+- ✅ Plus facile à tester
+- ✅ Compatible artifacts Claude
 
 ---
 
