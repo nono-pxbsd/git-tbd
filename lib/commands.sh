@@ -145,7 +145,7 @@ start() {
 }
 
 # ====================================
-# Commande finish
+# Commande finish (v3 - MODIFIÉ)
 # ====================================
 
 finish() {
@@ -153,7 +153,7 @@ finish() {
 
   local branch_input="" branch_type="" branch_name="" branch="" current=""
   local method="$DEFAULT_MERGE_MODE"
-  local open_pr="$OPEN_PR"
+  local open_pr="$OPEN_REQUEST"
   local silent="$SILENT_MODE"
   local title_input=""
 
@@ -200,8 +200,8 @@ finish() {
   local current_branch
   current_branch=$(git rev-parse --abbrev-ref HEAD 2>/dev/null)
 
-  # === CAS 1 : PR existe déjà ===
-  if pr_exists "$branch"; then
+  # === CAS 1 : Request existe déjà ===
+  if request_exists "$branch"; then
     log_info "📤 Synchronisation de la branche avec la $term..."
     publish "$branch" --force-sync || return 1
     
@@ -228,9 +228,15 @@ finish() {
     return 0
   fi
 
-  # === CAS 2 : Pas de PR, config force PR OU --pr explicite ===
-  if [[ "$REQUIRE_PR_ON_FINISH" == true ]] || [[ "$open_pr" == true ]]; then
-    open_pr "$branch" || return 1
+  # === CAS 2 : Pas de request, config force request OU --pr explicite ===
+  if [[ "$REQUIRE_REQUEST_ON_FINISH" == true ]] || [[ "$open_pr" == true ]]; then
+    # 🆕 v3 : PAS DE SQUASH LOCAL avant la PR
+    # On publie directement (push normal)
+    log_info "📤 Publication de la branche..."
+    publish "$branch" || return 1
+    
+    # Création de la request
+    open_request "$branch" || return 1
     
     print_message ""
     
@@ -242,7 +248,8 @@ finish() {
     return 0
   fi
 
-  # === CAS 3 : Pas de PR, config permet merge local ===
+  # === CAS 3 : Pas de request, config permet merge local ===
+  # ✅ On GARDE le squash local pour les merges directs (sans request)
   log_success "Finalisation locale sans $term"
   local merge_mode
   merge_mode=$(prepare_merge_mode) || return 1
@@ -309,17 +316,14 @@ publish() {
       case "$status" in
         ahead)
           log_info "📊 Branche en avance → push standard"
-          # Pas besoin de force_push, Git gère
           ;;
         behind)
           log_info "📊 Branche en retard → activation de --force-sync"
           force_sync=true
           ;;
         diverged)
-          # Utiliser la stratégie configurée
           local strategy="$DEFAULT_DIVERGED_STRATEGY"
           
-          # En mode silencieux, utiliser le fallback si strategy = ask
           if [[ "$SILENT_MODE" == true && "$strategy" == "ask" ]]; then
             strategy="$SILENT_DIVERGED_FALLBACK"
             log_debug "Mode silencieux : utilisation du fallback $strategy"
@@ -327,17 +331,17 @@ publish() {
           
           case "$strategy" in
             force-push)
-              log_warn "⚠️  Branche divergée → activation de --force-push"
+              log_warn "⚠️ Branche divergée → activation de --force-push"
               log_info "💡 Stratégie : force push (local écrase origin)"
               force_push=true
               ;;
             force-sync)
-              log_warn "⚠️  Branche divergée → activation de --force-sync"
+              log_warn "⚠️ Branche divergée → activation de --force-sync"
               log_info "💡 Stratégie : sync (rebase) puis push"
               force_sync=true
               ;;
             ask)
-              log_warn "⚠️  Branche divergée détectée"
+              log_warn "⚠️ Branche divergée détectée"
               print_message ""
               log_info "${BOLD}Quelle stratégie utiliser ?${RESET}"
               print_message ""
@@ -398,7 +402,7 @@ publish() {
           ;;
         diverged)
           if [[ "$force_sync" == true ]]; then
-            log_warn "⚠️  Divergence détectée : tentative de synchronisation..."
+            log_warn "⚠️ Divergence détectée : tentative de synchronisation..."
             sync_branch_to_remote --force "$branch" || return 1
           else
             log_error "La branche '$branch' a divergé d'origin/$branch"
@@ -445,11 +449,11 @@ publish() {
 }
 
 # ====================================
-# Commande open_pr
+# Commande open_request
 # ====================================
 
-open_pr() {
-  log_debug "open_pr() called with arguments: $*"
+open_request() {
+  log_debug "open_request() called with arguments: $*"
 
   local branch_input="$1"
   local branch_type="" branch_name=""
@@ -460,16 +464,90 @@ open_pr() {
   fi
 
   local branch="${branch_type}/${branch_name}"
-  local icon="$(get_branch_icon "$branch_type")"
-  local title="${icon}${branch_name}"
-  local body="${2:-Pull request automatique depuis \`$branch\` vers \`${DEFAULT_BASE_BRANCH}\`}"
   local term=$(get_platform_term)
 
   log_info "📤 Publication de la branche avant création de la $term..."
   publish "$branch" || return 1
 
+  # 🆕 Construction du titre depuis les commits
+  local title
+  local commit_count
+  commit_count=$(get_commit_count_between_branches_raw "$DEFAULT_BASE_BRANCH" "$branch")
+  
+  log_debug "Nombre de commits : $commit_count"
+  
+  if [[ "$commit_count" -eq 1 ]]; then
+    # 1 seul commit : utiliser son message
+    title=$(git log -1 --pretty=%s "$branch")
+    log_debug "1 commit détecté, titre : $title"
+  else
+    # Plusieurs commits
+    if [[ "$SILENT_MODE" != true ]]; then
+      log_info "💬 ${BOLD}Titre de la $term${RESET}"
+      local first_commit
+      first_commit=$(git log --reverse --pretty=%s "$branch" "^$DEFAULT_BASE_BRANCH" | head -n1)
+      print_message "  • Premier commit : $first_commit"
+      print_message "  • Nombre de commits : $commit_count"
+      print_message ""
+      read -r -p "Titre (vide = premier commit) : " title < /dev/tty
+      
+      [[ -z "$title" ]] && title="$first_commit"
+    else
+      # Mode silencieux : prendre le premier commit
+      title=$(git log --reverse --pretty=%s "$branch" "^$DEFAULT_BASE_BRANCH" | head -n1)
+    fi
+    
+    log_debug "Titre choisi : $title"
+  fi
+  
+  # Ajouter l'icône si pas déjà présente
+  local icon=$(get_branch_icon "$branch_type")
+  if [[ ! "$title" =~ ^$icon ]]; then
+    title="$icon $title"
+    log_debug "Icône ajoutée : $title"
+  fi
+  
+  # 🆕 Construire le body (liste des commits)
+  local body
+  body=$(git log --pretty=format:"- %s" "$branch" "^$DEFAULT_BASE_BRANCH")
+  log_debug "Body généré avec $commit_count commits"
+  
+  # Ajouter (PR/MR) temporairement
+  title="$title ($term)"
+
   log_info "🔧 Création de la $term via $GIT_PLATFORM..."
+  log_debug "Titre temporaire : $title"
+  
   git_platform_cmd pr-create --base "$DEFAULT_BASE_BRANCH" --head "$branch" --title "$title" --body "$body" || return 1
+
+  # 🆕 Récupérer le numéro et modifier le titre
+  local pr_number
+  case "$GIT_PLATFORM" in
+    github)
+      pr_number=$(gh pr view "$branch" --json number -q ".number" 2>/dev/null)
+      ;;
+    gitlab)
+      pr_number=$(glab mr view "$branch" 2>/dev/null | grep -oP '!\K\d+' | head -n1)
+      ;;
+  esac
+  
+  if [[ -n "$pr_number" ]]; then
+    # Enlever (PR) et ajouter (PR #XX)
+    local final_title="${title% (*)} ($term #$pr_number)"
+    
+    log_debug "Modification du titre : $final_title"
+    
+    case "$GIT_PLATFORM" in
+      github)
+        gh pr edit "$branch" --title "$final_title" 2>/dev/null
+        ;;
+      gitlab)
+        glab mr update "$pr_number" --title "$final_title" 2>/dev/null
+        ;;
+    esac
+    
+    log_success "$term #$pr_number créée avec le titre : $final_title"
+  fi
 
   local url
   case "$GIT_PLATFORM" in
@@ -477,7 +555,7 @@ open_pr() {
       url=$(gh pr view "$branch" --json url -q ".url" 2>/dev/null)
       ;;
     gitlab)
-      url=$(glab mr view "$branch" 2>/dev/null | grep -oP 'https://[^\s]+')
+      url=$(glab mr view "$branch" 2>/dev/null | grep -oP 'https://[^\s]+' | head -n1)
       ;;
   esac
 
@@ -486,14 +564,13 @@ open_pr() {
 }
 
 # ====================================
-# Commande validate_pr
+# Commande validate_request
 # ====================================
 
-validate_pr() {
-  log_debug "validate_pr() called with arguments: $*"
+validate_request() {
+  log_debug "validate_request() called with arguments: $*"
 
   local branch=""
-  local merge_mode="squash"
   local assume_yes=false
   local force_sync=false
 
@@ -503,7 +580,6 @@ validate_pr() {
   local args=()
   for arg in "$@"; do
     case "$arg" in
-      --merge-mode=*) merge_mode="${arg#*=}" ;;
       -y|--assume-yes) assume_yes=true ;;
       --force-sync) force_sync=true ;;
       -*) ;;
@@ -520,7 +596,7 @@ validate_pr() {
   local term=$(get_platform_term)
   local term_long=$(get_platform_term_long)
 
-  log_info "📝 Validation de la $term sur branche : ${CYAN}$branch${RESET}"
+  log_info "🔍 Validation de la $term sur branche : ${CYAN}$branch${RESET}"
 
   # === PHASE 1 : Vérifications préalables ===
   if ! local_branch_exists "$branch"; then
@@ -534,14 +610,14 @@ validate_pr() {
     return 1
   fi
 
-  # === PHASE 2 : Synchronisation (attente explicite) ===
+  # === PHASE 2 : Synchronisation ===
   log_info "🔄 Synchronisation avec le remote..."
   git_safe fetch origin "$branch" || {
     log_error "Échec de la synchronisation avec origin/$branch"
     return 1
   }
 
-  # === PHASE 3 : Vérification de la PR/MR ===
+  # === PHASE 3 : Vérification de la Request ===
   log_info "🔍 Vérification de l'existence d'une $term..."
   
   local pr_number
@@ -553,7 +629,7 @@ validate_pr() {
     return 1
   fi
   
-  log_success "$term trouvée"
+  log_success "$term #$pr_number trouvée"
 
   # === PHASE 4 : Vérification de la synchro ===
   local status
@@ -562,8 +638,6 @@ validate_pr() {
   if [[ "$status" != "synced" ]]; then
     log_warn "Branche '$branch' non synchronisée (statut: $status)"
     
-    # Si la branche est en avance (ahead), c'est probablement après un squash local
-    # Il faut forcer le push au lieu de rebase
     if [[ "$status" == "ahead" ]]; then
       log_info "📤 La branche est en avance (probablement après squash local)"
       log_info "🔧 Force push en cours..."
@@ -578,9 +652,37 @@ validate_pr() {
     fi
   fi
 
-  # === PHASE 5 : Affichage du résumé (APRÈS toutes les I/O) ===
+  # === PHASE 5 : Récupération des infos Request ===
+  log_info "📋 Récupération des informations de la $term..."
+  
+  local pr_title pr_body
+  
+  case "$GIT_PLATFORM" in
+    github)
+      pr_title=$(gh pr view "$branch" --json title -q ".title" 2>/dev/null)
+      ;;
+    gitlab)
+      pr_title=$(glab mr view "$branch" 2>/dev/null | grep -oP 'title: \K.*')
+      ;;
+  esac
+  
+  if [[ -z "$pr_title" ]]; then
+    log_error "Impossible de récupérer le titre de la $term"
+    return 1
+  fi
+  
+  # Construire le body (liste des commits)
+  pr_body=$(git log --pretty=format:"- %s" "$branch" "^$DEFAULT_BASE_BRANCH")
+  
+  log_debug "Titre PR : $pr_title"
+  log_debug "Body PR : $pr_body"
+
+  # === PHASE 6 : Affichage du résumé ===
   print_message ""
   log_info "📋 ${BOLD}Résumé de la $term${RESET}"
+  print_message ""
+  print_message "  Titre : ${CYAN}$pr_title${RESET}"
+  print_message "  Branche : ${CYAN}$branch${RESET} → ${CYAN}${DEFAULT_BASE_BRANCH}${RESET}"
   print_message ""
   
   git_platform_cmd pr-view "$branch" 2>/dev/null || {
@@ -589,7 +691,7 @@ validate_pr() {
   
   print_message ""
 
-  # === PHASE 6 : Confirmation utilisateur ===
+  # === PHASE 7 : Confirmation utilisateur ===
   local confirm="n"
   
   if [[ "$assume_yes" == true ]]; then
@@ -604,23 +706,230 @@ validate_pr() {
     return 1
   fi
 
-  # === PHASE 7 : Préparation du merge ===
-  log_info "🔧 Préparation du merge..."
+  # === PHASE 8 : Squash merge local ===
+  log_info "🔄 Basculement sur $DEFAULT_BASE_BRANCH..."
+  git_safe checkout "$DEFAULT_BASE_BRANCH" || return 1
   
-  local final_merge_mode
-  final_merge_mode=$(prepare_merge_mode "$branch") || return 1
+  log_info "⬇️ Mise à jour de $DEFAULT_BASE_BRANCH..."
+  git_safe pull || return 1
+  
+  log_info "🔀 Squash merge de $branch..."
+  git_safe merge --squash "$branch" || {
+    log_error "Échec du squash merge"
+    log_info "💡 Résolvez les conflits puis committez manuellement"
+    return 1
+  }
+  
+  # Construire le message final
+  local final_message="$pr_title
 
-  log_debug "final_merge_mode reçu de prepare_merge_mode: '$final_merge_mode'"
+$pr_body"
+  
+  log_info "💬 Création du commit de merge..."
+  git_safe commit -m "$final_message" || {
+    log_error "Échec du commit"
+    return 1
+  }
+  
+  log_info "📤 Push vers $DEFAULT_BASE_BRANCH..."
+  git_safe push origin "$DEFAULT_BASE_BRANCH" || {
+    log_error "Échec du push"
+    return 1
+  }
+  
+  log_success "Merge effectué dans $DEFAULT_BASE_BRANCH"
 
-  # === PHASE 8 : Exécution finale ===
-  finalize_branch_merge \
-    --branch="$branch" \
-    --merge-mode="$final_merge_mode" \
-    --via-pr=true
+  # === PHASE 9 : Fermeture de la Request ===
+  log_info "🔒 Fermeture de la $term #$pr_number..."
+  
+  case "$GIT_PLATFORM" in
+    github)
+      gh pr close "$branch" --comment "Merged via gittbd validate" 2>/dev/null || {
+        log_warn "Impossible de fermer la PR automatiquement"
+      }
+      ;;
+    gitlab)
+      glab mr close "$pr_number" --comment "Merged via gittbd validate" 2>/dev/null || {
+        log_warn "Impossible de fermer la MR automatiquement"
+      }
+      ;;
+  esac
+
+  # === PHASE 10 : Nettoyage des branches ===
+  log_info "🧹 Nettoyage des branches..."
+  
+  # Supprimer la branche distante
+  if remote_branch_exists "$branch"; then
+    delete_remote_branch "$branch"
+  fi
+  
+  # Supprimer la branche locale
+  if git show-ref --verify --quiet "refs/heads/$branch"; then
+    git branch -d "$branch" 2>/dev/null || {
+      log_warn "Impossible de supprimer la branche locale avec -d, utilisation de -D..."
+      git branch -D "$branch"
+    }
+    log_success "Branche locale $branch supprimée"
+  fi
+  
+  print_message ""
+  log_success "🎉 $term #$pr_number validée et mergée avec succès !"
 }
 
 # ====================================
-# Gestion de versions (bump)
+# Commande cleanup
+# ====================================
+
+cleanup() {
+  log_debug "cleanup() called with arguments: $*"
+
+  local branch_input="$1"
+  local branch=""
+
+  # Si aucun argument, tenter d'auto-détecter
+  if [[ -z "$branch_input" ]]; then
+    log_info "🔍 Recherche de branches mergées..."
+    
+    # Lister les branches locales (sauf main)
+    local branches
+    branches=$(git branch --format='%(refname:short)' | grep -v "^${DEFAULT_BASE_BRANCH}$")
+    
+    if [[ -z "$branches" ]]; then
+      log_warn "Aucune branche locale trouvée (hors $DEFAULT_BASE_BRANCH)"
+      return 0
+    fi
+    
+    local merged_branches=()
+    
+    # Vérifier chaque branche si elle est mergée sur GitHub/GitLab
+    while IFS= read -r b; do
+      log_debug "Vérification de $b..."
+      
+      # Vérifier si la branche existe encore à distance
+      if ! remote_branch_exists "$b"; then
+        log_debug "$b n'existe plus à distance, probablement mergée"
+        merged_branches+=("$b")
+      fi
+    done <<< "$branches"
+    
+    if [[ ${#merged_branches[@]} -eq 0 ]]; then
+      log_info "Aucune branche mergée détectée"
+      return 0
+    elif [[ ${#merged_branches[@]} -eq 1 ]]; then
+      branch="${merged_branches[0]}"
+      log_info "🧹 Branche mergée détectée : ${CYAN}$branch${RESET}"
+      
+      if [[ "$SILENT_MODE" != true ]]; then
+        read -r -p "Nettoyer maintenant ? [Y/n] " confirm < /dev/tty
+        if [[ "$confirm" =~ ^[Nn]$ ]]; then
+          log_warn "Nettoyage annulé"
+          return 0
+        fi
+      fi
+    else
+      # Plusieurs branches, sélection interactive
+      log_info "Plusieurs branches mergées détectées :"
+      print_message ""
+      
+      local i=1
+      for b in "${merged_branches[@]}"; do
+        print_message "  $i. $b"
+        ((i++))
+      done
+      
+      print_message ""
+      read -r -p "Numéro de la branche à nettoyer (0 = toutes) : " choice < /dev/tty
+      
+      if [[ "$choice" == "0" ]]; then
+        for b in "${merged_branches[@]}"; do
+          cleanup "$b"
+        done
+        return 0
+      elif [[ "$choice" =~ ^[0-9]+$ ]] && [[ "$choice" -ge 1 ]] && [[ "$choice" -le ${#merged_branches[@]} ]]; then
+        branch="${merged_branches[$((choice-1))]}"
+      else
+        log_error "Choix invalide"
+        return 1
+      fi
+    fi
+  else
+    branch="$branch_input"
+  fi
+
+  # Validation du format de la branche
+  if [[ "$branch" != */* ]]; then
+    log_error "Format de branche invalide : '$branch'"
+    log_info "💡 Format attendu : type/nom (ex: feature/login)"
+    return 1
+  fi
+
+  log_info "🧹 Nettoyage de la branche ${CYAN}$branch${RESET}..."
+
+  # Vérifier qu'on n'est pas sur cette branche
+  local current_branch
+  current_branch=$(git rev-parse --abbrev-ref HEAD 2>/dev/null)
+  
+  if [[ "$current_branch" == "$branch" ]]; then
+    log_info "🔄 Basculement sur $DEFAULT_BASE_BRANCH..."
+    git_safe checkout "$DEFAULT_BASE_BRANCH" || {
+      log_error "Impossible de basculer sur $DEFAULT_BASE_BRANCH"
+      return 1
+    }
+  fi
+
+  # Mise à jour de main
+  log_info "⬇️ Mise à jour de $DEFAULT_BASE_BRANCH..."
+  local current_on_main=false
+  if [[ "$current_branch" != "$DEFAULT_BASE_BRANCH" ]]; then
+    git_safe checkout "$DEFAULT_BASE_BRANCH" || return 1
+    current_on_main=true
+  fi
+  
+  git_safe pull || {
+    log_warn "Échec de la mise à jour de $DEFAULT_BASE_BRANCH"
+  }
+
+  # Suppression de la branche locale (force)
+  if git show-ref --verify --quiet "refs/heads/$branch"; then
+    log_info "🗑️ Suppression de la branche locale..."
+    
+    git branch -D "$branch" 2>/dev/null || {
+      log_error "Échec de la suppression de la branche locale"
+      return 1
+    }
+    
+    log_success "Branche locale ${CYAN}$branch${RESET} supprimée"
+  else
+    log_debug "Branche locale $branch n'existe pas (déjà supprimée)"
+  fi
+
+  # Suppression de la branche distante si elle existe
+  if remote_branch_exists "$branch"; then
+    log_info "🌐 Suppression de la branche distante..."
+    delete_remote_branch "$branch"
+  else
+    log_debug "Branche distante $branch n'existe pas (déjà supprimée)"
+  fi
+
+  # Nettoyage des références Git
+  log_info "🧼 Nettoyage des références Git..."
+  git_safe remote prune origin 2>/dev/null || {
+    log_warn "Échec du nettoyage des références"
+  }
+
+  # Revenir à la branche d'origine si on a changé
+  if [[ "$current_on_main" == true && "$current_branch" != "$DEFAULT_BASE_BRANCH" ]]; then
+    if git show-ref --verify --quiet "refs/heads/$current_branch"; then
+      git_safe checkout "$current_branch"
+    fi
+  fi
+
+  print_message ""
+  log_success "✅ Branche ${CYAN}$branch${RESET} nettoyée avec succès"
+}
+
+# ====================================
+# Gestion de versions (bump) - Inchangé
 # ====================================
 
 get_latest_version() {
@@ -781,7 +1090,7 @@ bump() {
     fi
   fi
   
-  log_info "🏷️  Création du tag v${new_version}..."
+  log_info "🏷️ Création du tag v${new_version}..."
   
   local tag_message
   tag_message="Release v${new_version}
@@ -831,7 +1140,7 @@ ${changelog}"
       return 1
     fi
   else
-    log_info "ℹ️  Tag créé localement uniquement (--no-push activé)"
+    log_info "ℹ️ Tag créé localement uniquement (--no-push activé)"
     log_info "💡 Pour le pusher plus tard :"
     log_info "   git push origin v${new_version}"
   fi
