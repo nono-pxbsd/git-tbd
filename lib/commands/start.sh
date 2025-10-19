@@ -14,8 +14,9 @@ select_branch_type() {
       options+=("${BRANCH_ICONS[$type]} $type")
     done
     
-    IFS=$'\n' options=($(sort <<<"${options[*]}"))
-    unset IFS
+    local sorted_options
+    mapfile -t sorted_options < <(printf '%s\n' "${options[@]}" | sort)
+    options=("${sorted_options[@]}")
     
     selected_type=$(printf "%s\n" "${options[@]}" | \
       fzf --prompt="🎯 Type de branche : " \
@@ -37,9 +38,8 @@ select_branch_type() {
     log_info "🎯 ${BOLD}Sélection du type de branche${RESET}"
     print_message ""
     
-    local -a types_sorted
-    IFS=$'\n' types_sorted=($(printf "%s\n" "${!BRANCH_ICONS[@]}" | sort))
-    unset IFS
+    local types_sorted
+    mapfile -t types_sorted < <(printf "%s\n" "${!BRANCH_ICONS[@]}" | sort)
     
     local i=1
     for type in "${types_sorted[@]}"; do
