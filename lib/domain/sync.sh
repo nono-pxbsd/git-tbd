@@ -1,125 +1,9 @@
 #!/bin/bash
-# branches.sh - Gestion des branches
-
-create_branch() {
-  local type="$1"
-  local name="$2"
-  local base_branch="$DEFAULT_BASE_BRANCH"
-
-  if [[ -z "$type" || -z "$name" ]]; then
-    log_error "Type ou nom de branche manquant"
-    return 1
-  fi
-
-  local full_branch="${type}/${name}"
-
-  if git show-ref --verify --quiet "refs/heads/$full_branch"; then
-    log_warn "La branche '$full_branch' existe déjà"
-    return 1
-  fi
-
-  log_info "🔄 Basculement sur ${CYAN}$base_branch${RESET}"
-  git_safe checkout "$base_branch" || {
-    log_error "La branche $base_branch est introuvable"
-    return 1
-  }
-
-  log_info "⬇️  Mise à jour de $base_branch"
-  git_safe pull || return 1
-
-  log_info "🌱 Création de la branche ${CYAN}$full_branch${RESET}"
-  git_safe checkout -b "$full_branch" || return 1
-
-  log_success "Branche créée : ${BOLD}$full_branch${RESET}"
-}
-
-parse_branch_input() {
-  local input="$1"
-  local -n out_type=$2
-  local -n out_name=$3
-
-  if [[ "$input" != */* ]]; then
-    log_error "Format de branche invalide : '$input'. Attendu : type/nom"
-    return 1
-  fi
-
-  local type="${input%%/*}"
-  local name="${input#*/}"
-
-  log_debug "parse_branch_input() → type: $type, name: $name"
-
-  if [[ -z "${BRANCH_ICONS[$type]}" ]]; then
-    log_warn "Type de branche non reconnu : '$type'"
-    log_info "💡 Types disponibles : ${!BRANCH_ICONS[*]}"
-    return 1
-  fi
-  
-  out_type="$type"
-  out_name="$name"
-  return 0
-}
-
-get_branch_input_or_current() {
-  local input="$1"
-
-  if [[ -n "$input" ]]; then
-    echo "$input"
-  else
-    local current_branch
-    current_branch=$(git symbolic-ref --quiet --short HEAD 2>/dev/null)
-
-    if [[ -z "$current_branch" ]]; then
-      log_error "Impossible de déterminer la branche courante (HEAD détaché ?)"
-      return 1
-    fi
-
-    echo "$current_branch"
-  fi
-}
-
-is_valid_branch_type() {
-  local type="$1"
-  [[ -n "${BRANCH_ICONS[$type]}" ]]
-}
-
-is_current_branch() {
-  local input="$1"
-  local current
-  current="$(git branch --show-current 2>/dev/null)"
-
-  [[ "$input" == "$current" ]]
-}
-
-get_branch_icon() {
-  local type="$1"
-  local icon="${BRANCH_ICONS[$type]}"
-  [[ -n "$icon" ]] && echo "$icon"
-}
-
-local_branch_exists() {
-  git rev-parse --verify "$1" >/dev/null 2>&1
-}
-
-remote_branch_exists() {
-  local branch="$1"
-  git ls-remote --heads origin "$branch" 2>/dev/null | grep -q "$branch"
-}
-
-branch_exists() {
-  local branch="$1"
-  local_branch_exists "$branch" || remote_branch_exists "$branch"
-}
-
-delete_remote_branch() {
-  local branch="$1"
-  
-  if remote_branch_exists "$branch"; then
-    git_safe push origin --delete "$branch" || log_warn "Impossible de supprimer la branche distante"
-    log_info "🗑️  Branche distante ${CYAN}$branch${RESET} supprimée"
-  fi
-}
+# lib/domain/sync.sh
+# shellcheck disable=SC2154
 
 get_branch_sync_status() {
+  # Retourne : synced | ahead | behind | diverged
   local branch="$1"
   local ahead behind
 
@@ -138,10 +22,12 @@ get_branch_sync_status() {
 }
 
 branch_is_sync() {
+  # Vérifie si une branche est synced
   [[ "$(get_branch_sync_status "$1")" == "synced" ]]
 }
 
 sync_branch_to_remote() {
+  # Synchronise une branche avec origin (rebase)
   local target_branch=""
   local force=false
 
@@ -207,6 +93,7 @@ sync_branch_to_remote() {
 }
 
 is_branch_clean() {
+  # Vérifie si une branche est propre (pas de modifs non committées)
   local target_branch="$1"
   local current_branch
   current_branch="$(git symbolic-ref --short HEAD 2>/dev/null)"
@@ -242,6 +129,7 @@ is_branch_clean() {
 }
 
 is_worktree_clean() {
+  # Vérifie si le worktree est propre
   if [[ -n $(git diff --cached 2>/dev/null) ]]; then
     log_debug "Des fichiers sont en attente de commit (index)"
     return 1
@@ -263,38 +151,4 @@ is_worktree_clean() {
   fi
 
   return 0
-}
-
-is_valid_branch_name() {
-  local name="$1"
-
-  if [[ -z "$name" || ${#name} -lt 3 ]]; then
-    return 1
-  fi
-
-  if [[ "$name" =~ [\ ~^:?*\[\\\]@{}] ]]; then
-    return 1
-  fi
-
-  if [[ "$name" =~ (^[-/]|[-/]$|//|--) ]]; then
-    return 1
-  fi
-
-  return 0
-}
-
-normalize_branch_name() {
-  local raw="$1"
-  local slug
-
-  slug=$(echo "$raw" \
-    | iconv -f utf-8 -t ascii//TRANSLIT 2>/dev/null \
-    | tr '[:upper:]' '[:lower:]' \
-    | sed -E 's/[^a-z0-9]+/-/g' \
-    | sed -E 's/^-+|-+$//g' \
-    | sed -E 's/--+/-/g')
-
-  [[ -z "$slug" ]] && slug="branch-$(date +%s)"
-
-  echo "$slug"
 }

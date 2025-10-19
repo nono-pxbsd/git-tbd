@@ -7,6 +7,67 @@ et ce projet adhère à [Semantic Versioning](https://semver.org/lang/fr/).
 
 ---
 
+## [3.1.0] - 2025-01-XX
+
+### 🏗️ Refactorisation majeure : Architecture modulaire
+
+#### ✨ Ajouts
+
+##### Nouvelle architecture de fichiers
+
+- **`lib/loader.sh`** : Module qui charge tous les autres modules dans l'ordre
+- **`lib/core/`** : Dossier contenant les fonctions de base
+  - `logging.sh` : Système de logs (6 fonctions depuis utils.sh)
+  - `git_wrapper.sh` : Wrapper Git sécurisé (4 fonctions depuis utils.sh)
+  - `validation.sh` : Validations génériques (7 fonctions depuis branches.sh)
+- **`lib/domain/`** : Dossier contenant la logique métier Git
+  - `branches.sh` : Gestion branches (5 fonctions depuis branches.sh)
+  - `commits.sh` : Gestion commits (7 fonctions depuis utils.sh)
+  - `sync.sh` : Synchronisation (5 fonctions depuis branches.sh)
+  - `requests.sh` : PR/MR (3 fonctions depuis utils.sh)
+- **`lib/commands/`** : Dossier contenant les commandes CLI
+  - `start.sh` : Commande start
+  - `finish.sh` : Commande finish
+  - `publish.sh` : Commande publish
+  - `open_request.sh` : open_request
+  - `validate_request.sh` : validate_request
+  - `cleanup.sh` : cleanup
+  - `sync.sh` : sync CLI wrapper
+  - `bump.sh` : bump + versioning
+
+##### Tests améliorés
+
+- **`tests/test_loader.sh`** : Teste que tous les modules se chargent correctement
+- Mise à jour de `tests/test_prompts.sh` : Utilise le loader au lieu de sourcer individuellement
+
+#### 🔧 Améliorations
+
+- **Maintenabilité** : Fichiers de 50-150 lignes au lieu de 3 fichiers de 200-900 lignes
+- **Lisibilité** : Séparation claire des responsabilités (core / domain / commands)
+- **Testabilité** : Chaque module peut être testé indépendamment
+- **Compatibilité Claude** : Fichiers assez petits pour tenir dans les artifacts
+- **Documentation** : Headers minimalistes, un commentaire par fonction si nécessaire
+
+#### 🗑️ Suppressions
+
+- **`lib/utils.sh`** : Remplacé par `core/*` + `domain/*`
+- **`lib/branches.sh`** : Remplacé par `core/validation.sh` + `domain/branches.sh` + `domain/sync.sh`
+- **`lib/commands.sh`** : Remplacé par `commands/*`
+
+#### ✅ Rétrocompatibilité
+
+- **100% rétrocompatible** : Aucun changement pour l'utilisateur
+- Toutes les commandes fonctionnent exactement pareil
+- `bin/gittbd` utilise maintenant `lib/loader.sh`
+
+#### 📚 Documentation
+
+- Ajout d'une section "Architecture des fichiers" dans README.md
+- Documentation des nouveaux modules dans le code
+- Guide de migration interne (pour développeurs)
+
+---
+
 ## [Unreleased] v3.0.0
 
 ### 🎯 Refonte majeure : Squash au moment du merge

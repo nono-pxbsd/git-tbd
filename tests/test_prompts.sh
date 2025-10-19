@@ -1,14 +1,14 @@
 #!/bin/bash
 # tests/test_prompts.sh - Tests de non-régression
 
-set -euo pipefail
+# 🔧 Pas de set -u pour éviter les problèmes avec nameref
+set -eo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 
-source "${PROJECT_DIR}/lib/config.sh"
-source "${PROJECT_DIR}/lib/utils.sh"
-source "${PROJECT_DIR}/lib/branches.sh"
+# Utiliser le loader
+source "${PROJECT_DIR}/lib/loader.sh"
 
 echo "🧪 Suite de tests pour gittbd"
 echo "=============================="
@@ -50,11 +50,31 @@ echo ""
 echo "Test 2 : Validation de branches"
 echo "--------------------------------"
 
-if parse_branch_input "feature/test" type name; then
-  if [[ "$type" == "feature" && "$name" == "test" ]]; then
-    echo "✅ Parse OK : type=$type, name=$name"
+# 🔧 Wrapper pour éviter le problème avec nameref
+test_parse_branch() {
+  local input="$1"
+  local result_type result_name
+  
+  # Désactiver temporairement set -u dans cette fonction
+  set +u
+  
+  if parse_branch_input "$input" result_type result_name; then
+    echo "$result_type|$result_name"
+    return 0
   else
-    echo "❌ Parse incorrect"
+    return 1
+  fi
+}
+
+# Test avec format valide
+if result=$(test_parse_branch "feature/test"); then
+  parsed_type="${result%%|*}"
+  parsed_name="${result##*|}"
+  
+  if [[ "$parsed_type" == "feature" && "$parsed_name" == "test" ]]; then
+    echo "✅ Parse OK : type=$parsed_type, name=$parsed_name"
+  else
+    echo "❌ Parse incorrect : type=$parsed_type, name=$parsed_name"
     exit 1
   fi
 else
@@ -62,8 +82,9 @@ else
   exit 1
 fi
 
-if parse_branch_input "invalid" type name 2>/dev/null; then
-  echo "❌ Parse devrait échouer"
+# Test avec format invalide
+if test_parse_branch "invalid" 2>/dev/null; then
+  echo "❌ Parse devrait échouer pour 'invalid'"
   exit 1
 else
   echo "✅ Parse échoue correctement pour 'invalid'"
@@ -98,21 +119,21 @@ echo "---------------------------"
 valid_names=("login-form" "fix-bug-123" "new-feature")
 invalid_names=("a" "ab" "  " "--test" "test--" "test//path")
 
-for name in "${valid_names[@]}"; do
-  if is_valid_branch_name "$name"; then
-    echo "✅ '$name' est valide"
+for name_test in "${valid_names[@]}"; do
+  if is_valid_branch_name "$name_test"; then
+    echo "✅ '$name_test' est valide"
   else
-    echo "❌ '$name' devrait être valide"
+    echo "❌ '$name_test' devrait être valide"
     exit 1
   fi
 done
 
-for name in "${invalid_names[@]}"; do
-  if is_valid_branch_name "$name"; then
-    echo "❌ '$name' devrait être invalide"
+for name_test in "${invalid_names[@]}"; do
+  if is_valid_branch_name "$name_test"; then
+    echo "❌ '$name_test' devrait être invalide"
     exit 1
   else
-    echo "✅ '$name' est bien rejeté"
+    echo "✅ '$name_test' est bien rejeté"
   fi
 done
 
