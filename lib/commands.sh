@@ -145,7 +145,7 @@ start() {
 }
 
 # ====================================
-# Commande finish
+# Commande finish (v3 - MODIFIÉ)
 # ====================================
 
 finish() {
@@ -153,7 +153,7 @@ finish() {
 
   local branch_input="" branch_type="" branch_name="" branch="" current=""
   local method="$DEFAULT_MERGE_MODE"
-  local open_pr="$OPEN_PR"
+  local open_pr="$OPEN_REQUEST"
   local silent="$SILENT_MODE"
   local title_input=""
 
@@ -200,8 +200,8 @@ finish() {
   local current_branch
   current_branch=$(git rev-parse --abbrev-ref HEAD 2>/dev/null)
 
-  # === CAS 1 : PR existe déjà ===
-  if pr_exists "$branch"; then
+  # === CAS 1 : Request existe déjà ===
+  if request_exists "$branch"; then
     log_info "📤 Synchronisation de la branche avec la $term..."
     publish "$branch" --force-sync || return 1
     
@@ -228,9 +228,15 @@ finish() {
     return 0
   fi
 
-  # === CAS 2 : Pas de PR, config force PR OU --pr explicite ===
-  if [[ "$REQUIRE_PR_ON_FINISH" == true ]] || [[ "$open_pr" == true ]]; then
-    open_pr "$branch" || return 1
+  # === CAS 2 : Pas de request, config force request OU --pr explicite ===
+  if [[ "$REQUIRE_REQUEST_ON_FINISH" == true ]] || [[ "$open_pr" == true ]]; then
+    # 🆕 v3 : PAS DE SQUASH LOCAL avant la PR
+    # On publie directement (push normal)
+    log_info "📤 Publication de la branche..."
+    publish "$branch" || return 1
+    
+    # Création de la request
+    open_request "$branch" || return 1
     
     print_message ""
     
@@ -242,7 +248,8 @@ finish() {
     return 0
   fi
 
-  # === CAS 3 : Pas de PR, config permet merge local ===
+  # === CAS 3 : Pas de request, config permet merge local ===
+  # ✅ On GARDE le squash local pour les merges directs (sans request)
   log_success "Finalisation locale sans $term"
   local merge_mode
   merge_mode=$(prepare_merge_mode) || return 1
