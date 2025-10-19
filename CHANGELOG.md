@@ -7,6 +7,306 @@ et ce projet adhère à [Semantic Versioning](https://semver.org/lang/fr/).
 
 ---
 
+## [Unreleased] v3.0.0
+
+### 🎯 Refonte majeure : Squash au moment du merge
+
+Date de release prévue : À déterminer
+
+#### ⚠️ BREAKING CHANGES
+
+##### 1. Workflow finish --pr modifié
+
+**Avant (v2.x) :**
+```bash
+gittbd finish --pr
+# → Squash local (3 commits → 1)
+# → Force push
+# → Création PR
+```
+
+**Maintenant (v3.0) :**
+```bash
+gittbd finish --pr
+# → Push normal (pas de squash)
+# → Création PR avec titre auto-généré
+```
+
+**Impact :** Les branches gardent leurs commits multiples jusqu'au merge final.
+
+**Migration :** Aucune action requise, le workflow reste compatible.
+
+---
+
+##### 2. Workflow validate refactorisé
+
+**Avant (v2.x) :**
+```bash
+gittbd validate feature/login
+# → Appelle gh pr merge --squash
+# → GitHub fait le merge
+```
+
+**Maintenant (v3.0) :**
+```bash
+gittbd validate feature/login
+# → Squash merge LOCAL
+# → Commit avec titre PR
+# → Push vers main
+# → Ferme la PR automatiquement
+# → Nettoie les branches
+```
+
+**Impact :** Contrôle total sur le message de commit, pas de désynchronisation.
+
+**Migration :** Aucune action requise, fonctionne mieux qu'avant.
+
+---
+
+##### 3. Variables de configuration renommées
+
+| Ancienne variable (v2.x) | Nouvelle variable (v3.0) |
+|--------------------------|--------------------------|
+| `OPEN_PR` | `OPEN_REQUEST` |
+| `REQUIRE_PR_ON_FINISH` | `REQUIRE_REQUEST_ON_FINISH` |
+
+**Migration :** Éditer `~/.local/share/gittbd/lib/config.sh` et renommer.
+
+---
+
+##### 4. Valeur local-squash supprimée
+
+**Variable :** `DEFAULT_MERGE_MODE`
+
+**Avant (v2.x) :**
+```bash
+DEFAULT_MERGE_MODE="local-squash"  # ou "squash" ou "merge"
+```
+
+**Maintenant (v3.0) :**
+```bash
+DEFAULT_MERGE_MODE="squash"  # ou "merge"
+# Note : "local-squash" n'existe plus
+```
+
+**Impact :** Si vous aviez `DEFAULT_MERGE_MODE="local-squash"`, changez pour `"squash"`.
+
+**Migration :**
+```bash
+# Dans lib/config.sh
+# Avant
+DEFAULT_MERGE_MODE="local-squash"
+
+# Après
+DEFAULT_MERGE_MODE="squash"
+```
+
+---
+
+#### ✨ Nouvelles fonctionnalités
+
+##### Commande cleanup
+
+Nouvelle commande pour nettoyer les branches après un merge via GitHub/GitLab.
+
+```bash
+# Nettoyage d'une branche spécifique
+gittbd cleanup feature/login
+
+# Auto-détection
+gittbd cleanup
+
+# Raccourcis
+gittbd clean
+gittbd c
+```
+
+**Utilité :** Après avoir cliqué sur "Squash and merge" dans GitHub, cette commande nettoie proprement la branche locale.
+
+---
+
+##### Titre de PR auto-généré
+
+Lors de la création d'une PR, le titre est maintenant construit automatiquement depuis les commits :
+
+- **1 seul commit :** Utilise son message
+- **Plusieurs commits :** Prompt interactif ou utilise le premier commit
+- **Ajout automatique :** `(PR #XX)` ou `(MR #XX)` selon la plateforme
+
+**Exemple :**
+```bash
+git commit -m "feat: add login form"
+git commit -m "feat: add validation"
+gittbd finish --pr
+
+# Titre PR généré : "✨ feat: add login form (PR #34)"
+# Body PR : Liste des 2 commits
+```
+
+---
+
+##### Body de PR avec liste des commits
+
+Le body de la PR contient maintenant automatiquement la liste de tous les commits de la branche.
+
+**Exemple :**
+```
+Titre : ✨ feat: add login form (PR #34)
+
+Body :
+- feat: add login form
+- feat: add validation
+- fix: typo in form
+```
+
+---
+
+##### Terminologie unifiée (interne)
+
+Les fonctions internes utilisent maintenant `request` au lieu de `pr`/`mr` :
+
+| Ancien nom (v2.x) | Nouveau nom (v3.0) |
+|-------------------|-------------------|
+| `open_pr()` | `open_request()` |
+| `validate_pr()` | `validate_request()` |
+| `pr_exists()` | `request_exists()` |
+
+**Impact utilisateur :** Aucun ! Les commandes CLI restent `gittbd pr` et `gittbd mr`.
+
+---
+
+##### Variable de configuration optionnelle
+
+**Nouvelle variable :** `AUTO_CLEANUP_DETECTION`
+
+```bash
+# lib/config.sh
+AUTO_CLEANUP_DETECTION=true
+```
+
+**Comportement :** Au lancement de gittbd, détecte automatiquement les branches locales qui ont été mergées sur GitHub/GitLab et propose de les nettoyer.
+
+**Par défaut :** `false` (opt-in)
+
+---
+
+#### 🔧 Améliorations
+
+##### Gestion des modifications après PR
+
+**Problème résolu :** En v2.x, ajouter un commit après la création de la PR nécessitait un re-squash manuel.
+
+**Solution v3.0 :**
+```bash
+gittbd finish --pr
+# Review demande un changement
+git commit -m "fix: after review"
+git push
+# ✅ Pas de problème, squash fait au merge final
+```
+
+---
+
+##### Pas de désynchronisation après merge GitHub
+
+**Problème résolu :** En v2.x, après un merge via GitHub, `git branch -d` échouait.
+
+**Solution v3.0 :** Utiliser `gittbd cleanup` qui gère proprement la suppression.
+
+---
+
+##### Messages de commit plus clairs
+
+Le message de commit final dans `main` contient maintenant :
+- Le titre de la PR (avec le numéro)
+- La liste complète des commits originaux dans le body
+
+**Exemple :**
+```
+commit abc123
+
+    ✨ feat: add login form (PR #34)
+    
+    - feat: add login form
+    - feat: add validation
+    - fix: typo in form
+```
+
+---
+
+#### 🐛 Corrections
+
+- **Fix :** Squash local avant PR causait des problèmes avec modifications après review  
+  **Résolu :** Le squash est maintenant fait au moment du merge, pas avant.
+
+- **Fix :** Désynchronisation après merge GitHub  
+  **Résolu :** La commande cleanup gère proprement le cas.
+
+---
+
+#### 📚 Documentation
+
+- **Ajout de docs/MIGRATION_v3.md**  
+  Guide complet de migration v2 → v3 avec :
+  - Explication des changements
+  - Comparaison workflow avant/après
+  - Migration pas à pas
+  - FAQ complète
+
+- **Mise à jour README.md**
+  - Section sur la commande cleanup
+  - Mise à jour du workflow recommandé
+  - Clarification sur merge local vs GitHub
+
+---
+
+#### 🔄 Changements internes
+
+##### Refactorisation de finish()
+- Suppression du squash local avant PR
+- Push normal (sans force)
+- Garde le squash local pour les merges directs (sans PR)
+
+##### Refactorisation de validate_request()
+- Squash merge local au lieu de déléguer à GitHub
+- Récupération du titre et body de la PR
+- Fermeture automatique de la PR après merge
+- Nettoyage automatique des branches
+
+##### Refactorisation de open_request()
+- Construction automatique du titre depuis les commits
+- Génération du body avec liste des commits
+- Ajout du numéro de PR/MR après création
+
+##### Nouvelle fonction cleanup()
+- Force delete de la branche locale
+- Suppression de la branche distante
+- Nettoyage des références Git
+- Détection automatique optionnelle
+
+---
+
+#### 🎯 Migration v2 → v3
+
+Voir le guide complet : [docs/MIGRATION_v3.md](docs/MIGRATION_v3.md)
+
+**Actions requises :**
+1. Mettre à jour : `cd ~/.local/share/gittbd && git pull`
+2. Éditer `lib/config.sh` :
+   - Renommer `OPEN_PR` → `OPEN_REQUEST`
+   - Renommer `REQUIRE_PR_ON_FINISH` → `REQUIRE_REQUEST_ON_FINISH`
+   - Si `DEFAULT_MERGE_MODE="local-squash"`, changer pour `"squash"`
+3. Tester sur une branche test
+4. Nettoyer les anciennes branches : `gittbd cleanup`
+
+---
+
+#### 🙏 Remerciements
+
+Merci à tous les utilisateurs pour leurs retours qui ont permis d'identifier les problèmes résolus dans cette v3.0 !
+
+---
+
 ## [2.2.2] - 2025-10-18
 
 ### 🛠️ Corrections
@@ -111,7 +411,7 @@ Le binaire `gittbds` est un wrapper léger qui exporte `SILENT_MODE=true` avant 
 
 #### Affichage du help amélioré
 
-- **Version affichée** : La version (2.1.1 puis 2.2.0) est maintenant visible dans `gittbd help`
+- **Version affichée** : La version (2.2.0) est maintenant visible dans `gittbd help`
 - **Couleurs corrigées** : Tous les codes ANSI s'affichent correctement (utilisation de `echo -e`)
 - **Chemin simplifié** : Affichage de `~/.local/share/gittbd/lib/config.sh` au lieu de `bin/../lib/config.sh`
 - **Section Documentation** : Ajout de liens vers README, VERSIONING.md et TUTORIAL.md
@@ -143,36 +443,6 @@ Ajout d'une section complète sur le mode silencieux avec :
 - Comparaison avec les anciennes méthodes
 - Configuration avancée optionnelle
 - Exemples d'utilisation
-
----
-
-### 📋 Commits inclus
-
-- feat: add gittbds silent mode command ([49cb3ec](https://github.com/nono-pxbsd/git-tbd/commit/49cb3ec))
-- fix: set executable bit on gittbd binary ([48717aa](https://github.com/nono-pxbsd/git-tbd/commit/48717aa))
-- fix: use echo -e to display print_help ([1abb48c](https://github.com/nono-pxbsd/git-tbd/commit/1abb48c))
-- Merge PR #30: fix/help-style ([7652e29](https://github.com/nono-pxbsd/git-tbd/commit/7652e29))
-- Merge PR #29: doc/patch-2-1-1-installation ([69756a7](https://github.com/nono-pxbsd/git-tbd/commit/69756a7))
-- docs: clarify installation with symlinks workflow ([188e91b](https://github.com/nono-pxbsd/git-tbd/commit/188e91b))
-
----
-
-### 🎯 Migration
-
-**Aucune action requise** pour les utilisateurs existants.
-
-Après mise à jour (`cd ~/.local/share/gittbd && git pull`), la commande `gittbds` sera automatiquement disponible.
-
-**Pour les nouvelles installations** :
-```bash
-git clone https://github.com/nono-pxbsd/git-tbd.git ~/.local/share/gittbd
-cd ~/.local/share/gittbd
-make install MODE=local
-```
-
-Les deux commandes seront installées :
-- `gittbd` : Mode normal
-- `gittbds` : Mode silencieux
 
 ---
 
@@ -214,36 +484,6 @@ git pull
 - **Makefile** : Utilise déjà `ln -sf` (symlinks) au lieu de copier les fichiers
 - **README.md** : 97 lignes ajoutées pour clarifier l'installation et les mises à jour
 - **Setup silencieux** : Chemin corrigé pour pointer vers `~/.local/share/gittbd/bin/setup-silent-mode.sh`
-
-### 📋 Commits inclus
-
-- Merge PR #28 : Simplification installation et upgrade ([7c1137c](https://github.com/nono-pxbsd/git-tbd/commit/7c1137c))
-- Merge PR #27 : Configuration installation séparée ([588d32f](https://github.com/nono-pxbsd/git-tbd/commit/588d32f))
-- Fix : Installation séparée du répertoire de développement ([61e2950](https://github.com/nono-pxbsd/git-tbd/commit/61e2950))
-- Merge PR #26 : Correction tags de version ([284621e](https://github.com/nono-pxbsd/git-tbd/commit/284621e))
-- Docs : Migration tags v0.x → v2.x ([71fa99a](https://github.com/nono-pxbsd/git-tbd/commit/71fa99a))
-- Merge PR #25 : Correction tags de version ([978afe2](https://github.com/nono-pxbsd/git-tbd/commit/978afe2))
-- Merge PR #23 : Amélioration message force push ([ed27180](https://github.com/nono-pxbsd/git-tbd/commit/ed27180))
-
-### 🎯 Migration
-
-**Aucune action requise** pour les utilisateurs existants.
-
-Si vous avez déjà installé gittbd via l'ancienne méthode et souhaitez profiter du nouveau workflow :
-
-```bash
-# 1. Désinstaller l'ancienne version
-make uninstall
-
-# 2. Supprimer l'ancien répertoire (si existant)
-rm -rf ~/.local/share/gittbd
-
-# 3. Réinstaller avec le nouveau workflow
-git clone https://github.com/nono-pxbsd/git-tbd.git ~/.local/share/gittbd
-cd ~/.local/share/gittbd
-make install MODE=local
-source ~/.zshrc  # ou ~/.bashrc
-```
 
 ---
 
@@ -317,7 +557,7 @@ Quand une branche a divergé sans flag `--force` :
   • gittbd publish --force-sync      : Force le rebase
   • gittbd publish --force-push      : Force le push (destructif)
 
-🔍 Cas typique : après git commit --amend ou rebase
+📝 Cas typique : après git commit --amend ou rebase
    → Utilisez --force ou --force-push
 ```
 
@@ -366,7 +606,7 @@ gittbd publish --force-sync
 
 ---
 
-### 🔍 Détails techniques
+### 📝 Détails techniques
 
 **Fichiers modifiés** :
 - `lib/config.sh` : Ajout de 2 variables
@@ -424,6 +664,8 @@ gittbd publish --force-sync
 - **Tests de validation** : Vérification des fonctions utilitaires
 - **Tests d'intégration** : Workflow complet testable
 
+---
+
 ### 🔧 Améliorations
 
 #### Performance et fiabilité
@@ -444,6 +686,8 @@ gittbd publish --force-sync
 - **Code réutilisable** : Fonctions atomiques et composables
 - **Commentaires améliorés** : Documentation inline claire
 
+---
+
 ### 🛠️ Corrections
 
 - **Messages dupliqués** : Suppression des logs redondants
@@ -454,11 +698,15 @@ gittbd publish --force-sync
 - **Validation de branche** : Vérifications plus strictes
 - **Gestion des erreurs** : Moins de crashs silencieux
 
+---
+
 ### 🗑️ Suppressions
 
 - Aucune fonctionnalité supprimée (rétrocompatible)
 - Code mort nettoyé
 - Commentaires obsolètes retirés
+
+---
 
 ### ⚠️ Breaking Changes
 
@@ -493,8 +741,14 @@ Aucun ! La v2.0 est **rétrocompatible** avec v1.x :
 
 ## Contributeurs
 
-### v2.2.1
+### v3.0.0
+- **nono.pxbsd** : Refonte squash workflow, commande cleanup, terminologie unifiée
+
+### v2.2.2
 - **nono.pxbsd** : Fix CI/CD ShellCheck annotations, nettoyage fichiers de test
+
+### v2.2.1
+- **nono.pxbsd** : Fix CI/CD ShellCheck config globale
 
 ### v2.2.0
 - **nono.pxbsd** : Commande gittbds, amélioration help, fix permissions
