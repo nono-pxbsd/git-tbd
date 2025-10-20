@@ -2,7 +2,7 @@
 
 Un outil CLI simple et puissant pour gérer un workflow Git en mode **Trunk-Based Development (TBD)**.
 
-**Version :** 3.0.0 🎉
+**Version :** 3.2.1 🎉
 
 ---
 
@@ -55,6 +55,15 @@ sudo dnf install fzf
 ---
 
 ## ✨ Fonctionnalités
+
+### 🆕 Nouveautés v3.2.1
+- **ShellCheck** : Correction des warnings SC2155 et SC2207 (PR #38)
+- **CI/CD** : Éviter la duplication des workflows GitHub Actions
+
+### 🆕 Nouveautés v3.2.0
+- 🧪 **Refonte des tests** : Séparation des tests d'intégration, de régression et unitaire
+- 🪈 **CI/CD** : Github Actions - Automatisation des tests
+- 📖 **Documentation** : Mises à jour du Changelog
 
 ### 🆕 Nouveautés v3.1.0
 
