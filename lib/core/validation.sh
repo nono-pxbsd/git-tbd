@@ -47,27 +47,33 @@ normalize_branch_name() {
 parse_branch_input() {
   # Parse une entrée type "feature/login" en type + name
   local input="$1"
-  local -n out_type=$2
-  local -n out_name=$3
+  local var_type="$2"
+  local var_name="$3"
+
+  log_debug "parse_branch_input() input='$input'"
 
   if [[ "$input" != */* ]]; then
     log_error "Format de branche invalide : '$input'. Attendu : type/nom"
     return 1
   fi
 
-  local type="${input%%/*}"
-  local name="${input#*/}"
+  local parsed_type="${input%%/*}"
+  local parsed_name="${input#*/}"
 
-  log_debug "parse_branch_input() → type: $type, name: $name"
+  log_debug "parse_branch_input() → type='$parsed_type', name='$parsed_name'"
 
-  if [[ -z "${BRANCH_ICONS[$type]}" ]]; then
-    log_warn "Type de branche non reconnu : '$type'"
+  if [[ -z "${BRANCH_ICONS[$parsed_type]}" ]]; then
+    log_warn "Type de branche non reconnu : '$parsed_type'"
     log_info "💡 Types disponibles : ${!BRANCH_ICONS[*]}"
     return 1
   fi
-  
-  out_type="$type"
-  out_name="$name"
+
+  # Utiliser declare -g pour assigner au scope global
+  eval "$var_type=\$parsed_type"
+  eval "$var_name=\$parsed_name"
+
+  log_debug "parse_branch_input() après assign: ${var_type}='${!var_type}', ${var_name}='${!var_name}'"
+
   return 0
 }
 

@@ -15,8 +15,10 @@ select_branch_type() {
     done
     
     local sorted_options
-    mapfile -t sorted_options < <(printf '%s\n' "${options[@]}" | sort)
-    options=("${sorted_options[@]}")
+    sorted_options=()
+    while IFS= read -r line; do
+      sorted_options+=("$line")
+    done < <(printf '%s\n' "${options[@]}" | sort)
     
     selected_type=$(printf "%s\n" "${options[@]}" | \
       fzf --prompt="🎯 Type de branche : " \
@@ -39,7 +41,10 @@ select_branch_type() {
     print_message ""
     
     local types_sorted
-    mapfile -t types_sorted < <(printf "%s\n" "${!BRANCH_ICONS[@]}" | sort)
+    types_sorted=()
+    while IFS= read -r line; do
+      types_sorted+=("$line")
+    done < <(printf '%s\n' "${!BRANCH_ICONS[@]}" | sort)
     
     local i=1
     for type in "${types_sorted[@]}"; do
@@ -102,6 +107,10 @@ start() {
     
     full_branch_name="${type}/${name}"
   fi
+
+  # Validations finales
+  log_debug "Avant validation: type='$type', name='$name', full_branch_name='$full_branch_name'"
+
 
   # Validations finales
   if ! is_valid_branch_type "$type"; then
