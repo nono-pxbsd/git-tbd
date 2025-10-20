@@ -1,6 +1,6 @@
 #!/bin/bash
 # gittbd : CLI pour workflow Trunk-Based Development 🚀
-# Version : 3.1.0
+# Version : 3.2.1
 # Auteur : nono.pxbsd
 # Licence : MIT
 
@@ -29,7 +29,7 @@ fi
 # Fonction d'aide
 print_help() {
   echo -e "${BOLD}gittbd${RESET} - CLI pour workflow Trunk-Based Development"
-  echo -e "${BOLD}Version :${RESET} 3.1.0\n"
+  echo -e "${BOLD}Version :${RESET} 3.2.1\n"
   
   echo -e "${BOLD}Usage :${RESET}"
   echo -e "  ${CYAN}gittbd start [type/name]${RESET}      → Crée une nouvelle branche (alias: s)"
