@@ -83,7 +83,12 @@ bump() {
   local bump_type="$1"
   local auto_confirm=false
   local skip_push=false
-  
+
+  # En mode silencieux, pas de prompts interactifs
+  if [[ "$SILENT_MODE" == true ]]; then
+    auto_confirm=true
+  fi
+
   shift 2>/dev/null || true
   for arg in "$@"; do
     case "$arg" in
